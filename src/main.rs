@@ -3,7 +3,8 @@ use std::ops::Index;
 
 const GLOBAL_SCALE: f32 = 1.0;
 const TILE_SIZE: f32 = 64.0;
-const MUSHROOM_SPEED: f32 = 10.0;
+const MUSHROOM_SPEED: f32 = 100.0;
+const INITIAL_SPORE_COUNT: i32 = 10;
 
 #[derive(Eq, Hash, PartialEq)]
 enum ImageType {
@@ -54,13 +55,15 @@ struct MushroomBase;
 struct Mushroom;
 
 #[derive(Component)]
-struct MushroomSummonManager {
-    timer: f32,
-    interval: f32,
+struct Ground;
+
+#[derive(Component)]
+struct Spores {
+    count: i32,
 }
 
 #[derive(Component)]
-struct Ground;
+struct SporeText;
 
 fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res<AssetServer>) {
     let mushroom_sprite_asset: Handle<Image> = asset_server.load("boi.png");
@@ -100,64 +103,25 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn(NodeBundle {
             style: Style {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
+                width: Val::Percent(20.0),
+                height: Val::Percent(10.0),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::SpaceAround,
+                left: Val::Percent(1.0),
                 ..default()
             },
             ..default()
         })
         .with_children(|parent| {
-            parent
-                .spawn(ButtonBundle {
-                    style: Style {
-                        width: Val::Px(150.0),
-                        height: Val::Px(65.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    background_color: Color::rgb(0.1, 0.5, 0.1).into(),
-                    ..default()
-                })
-                .with_children(|parent| {
-                    parent.spawn(TextBundle::from_section(
-                        "Button 1",
-                        TextStyle {
-                            font: font_handle.clone(),
-                            font_size: 40.0,
-                            // Alpha channel of the color controls transparency.
-                            color: Color::rgba(1.0, 1.0, 1.0, 0.2),
-                        },
-                    ));
-                });
-
-            // Button with a different color,
-            // to demonstrate the text looks different due to its transparency.
-            parent
-                .spawn(ButtonBundle {
-                    style: Style {
-                        width: Val::Px(150.0),
-                        height: Val::Px(65.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    background_color: Color::rgb(0.5, 0.1, 0.5).into(),
-                    ..default()
-                })
-                .with_children(|parent| {
-                    parent.spawn(TextBundle::from_section(
-                        "Button 2",
-                        TextStyle {
-                            font: font_handle.clone(),
-                            font_size: 40.0,
-                            // Alpha channel of the color controls transparency.
-                            color: Color::rgba(1.0, 1.0, 1.0, 0.2),
-                        },
-                    ));
-                });
+            parent.spawn((TextBundle::from_section(
+                "Spores:",
+                TextStyle {
+                    font: font_handle.clone(),
+                    font_size: 40.0,
+                    // Alpha channel of the color controls transparency.
+                    color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                },
+            ), SporeText));
         });
 }
 
@@ -216,9 +180,8 @@ fn setup_system(
         MushroomBase,
     ));
 
-    commands.spawn(MushroomSummonManager {
-        timer: 0.0,
-        interval: 2.0,
+    commands.spawn(Spores {
+        count: INITIAL_SPORE_COUNT,
     });
 }
 
@@ -226,16 +189,20 @@ fn mushroom_summon_system(
     mut commands: Commands,
     image_manager: Res<ImageManager>,
     q_mushroom_base: Query<&Transform, With<MushroomBase>>,
-    mut q_summon_manager: Query<&mut MushroomSummonManager>,
+    mut q_spores: Query<&mut Spores>,
+    mouse: Res<Input<MouseButton>>,
 ) {
     let mushroom_sprite = &image_manager[ImageType::Mushroom];
     let mushroom_base_position = q_mushroom_base.single().translation;
 
-    let mut mushroom_summon_manager = q_summon_manager.single_mut();
+    let mut spores = q_spores.single_mut();
 
-    if mushroom_summon_manager.timer <= 0.0 {
-        mushroom_summon_manager.timer = mushroom_summon_manager.interval;
+    if spores.count <= 0 {
+        return;
+    }
 
+    if mouse.just_pressed(MouseButton::Left) {
+        spores.count -= 1;
         commands.spawn((
             SpriteBundle {
                 transform: Transform {
@@ -257,6 +224,13 @@ fn mushroom_attack_system(mut q_mushroom: Query<&mut Transform, With<Mushroom>>,
     });
 }
 
+fn spore_text_update_system(mut q_spore_text: Query<&mut Text, With<SporeText>>, q_spores: Query<&Spores>) {
+    let mut text = q_spore_text.single_mut();
+    let spore_count = q_spores.single().count;
+
+    text.sections[0].value = format!("Spores: {spore_count}");
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -265,6 +239,6 @@ fn main() {
         })
         .add_systems(PreStartup, load_assets_system)
         .add_systems(Startup, (setup_system, setup_ui_system))
-        .add_systems(Update, (mushroom_summon_system, mushroom_attack_system))
+        .add_systems(Update, (mushroom_summon_system, mushroom_attack_system, spore_text_update_system))
         .run();
 }
