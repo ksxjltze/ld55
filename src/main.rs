@@ -9,7 +9,7 @@ const HERO_BASE_HP: f32 = 1000.0;
 const HERO_BASE_ATK: f32 = 10.0;
 const HERO_BASE_MOVE_SPEED: f32 = 20.0;
 const HERO_BASE_ATK_SPEED: f32 = 1.0;
-const HERO_BASE_ATK_RANGE: f32 = 10.0;
+const HERO_BASE_ATK_RANGE: f32 = 50.0;
 const HERO_BASE_LEVEL: i32 = 1;
 const HERO_BASE_EXP_REQUIRED: f32 = 100.0;
 
@@ -17,7 +17,8 @@ const MUSHROOM_BASE_HP: f32 = 10.0;
 const MUSHROOM_BASE_ATK: f32 = 1.0;
 const MUSHROOM_BASE_MOVE_SPEED: f32 = 100.0;
 const MUSHROOM_BASE_ATK_SPEED: f32 = 1.0;
-const MUSHROOM_BASE_ATK_RANGE: f32 = 5.0;
+const MUSHROOM_BASE_ATK_RANGE: f32 = 50.0;
+const MUSHROOM_BASE_SPORE_COUNT: i32 = 2;
 
 const HERO_EXP_PER_SECOND: f32 = 1.0;
 
@@ -26,7 +27,6 @@ enum ImageType {
     Mushroom,
     Hero,
     MushroomBase,
-    HeroBase,
     Ground,
 }
 
@@ -83,6 +83,7 @@ struct Mushroom {
     move_speed: f32,
     atk_speed: f32,
     atk_range: f32,
+    spore_count: i32,
 }
 
 impl Default for Mushroom {
@@ -93,6 +94,7 @@ impl Default for Mushroom {
             move_speed: MUSHROOM_BASE_MOVE_SPEED,
             atk_speed: MUSHROOM_BASE_ATK_SPEED,
             atk_range: MUSHROOM_BASE_ATK_RANGE,
+            spore_count: MUSHROOM_BASE_SPORE_COUNT,
         }
     }
 }
@@ -335,10 +337,13 @@ fn attack_timer_update_system(mut q_attack_timer: Query<&mut AttackTimer>, time:
 fn mushroom_death_system(
     mut commands: Commands,
     mut q_mushroom: Query<(Entity, &mut Transform, &mut Mushroom)>,
+    mut q_spores: Query<&mut Spores>,
 ) {
+    let mut spores = q_spores.single_mut();
     q_mushroom.for_each_mut(|mushroom| {
         if mushroom.2.hp <= 0.0 {
             commands.entity(mushroom.0).despawn();
+            spores.count += mushroom.2.spore_count;
         }
     })
 }
