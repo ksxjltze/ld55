@@ -32,30 +32,30 @@ enum ImageType {
 
 #[derive(Resource)]
 struct ImageManager {
-    images: HashMap<ImageType, Sprite>,
+    images: HashMap<ImageType, SpriteImage>,
 }
 
-struct Sprite {
+struct SpriteImage {
     image_handle: Handle<Image>,
     width: u32,
     height: u32,
 }
 
-impl Sprite {
+impl SpriteImage {
     fn handle(&self) -> Handle<Image> {
         return self.image_handle.clone_weak();
     }
 }
 
 impl ImageManager {
-    fn get(&self, key: ImageType) -> &Sprite {
+    fn get(&self, key: ImageType) -> &SpriteImage {
         return &self.images[&key];
     }
 }
 
 impl Index<ImageType> for ImageManager {
-    type Output = Sprite;
-    fn index(&self, key: ImageType) -> &Sprite {
+    type Output = SpriteImage;
+    fn index(&self, key: ImageType) -> &SpriteImage {
         self.get(key)
     }
 }
@@ -130,7 +130,7 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 
     image_manager.images.insert(
         ImageType::Mushroom,
-        Sprite {
+        SpriteImage {
             image_handle: mushroom_sprite_asset,
             width: 0,
             height: 0,
@@ -139,7 +139,7 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 
     image_manager.images.insert(
         ImageType::MushroomBase,
-        Sprite {
+        SpriteImage {
             image_handle: mushroom_base_sprite_asset,
             width: 0,
             height: 0,
@@ -148,7 +148,7 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 
     image_manager.images.insert(
         ImageType::Ground,
-        Sprite {
+        SpriteImage {
             image_handle: ground_sprite_asset,
             width: 0,
             height: 0,
@@ -157,7 +157,7 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 
     image_manager.images.insert(
         ImageType::Hero,
-        Sprite {
+        SpriteImage {
             image_handle: hero_sprite_asset,
             width: 0,
             height: 0,
@@ -304,10 +304,13 @@ fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
 fn hero_attack_system(
     mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer, &mut InCombat)>,
     mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
+    mut q_hero_sprite: Query<&mut Sprite, With<Hero>>,
 ) {
     let hero = q_hero.single_mut();
     let mut combat_status = hero.3;
     let mut attack_timer = hero.2;
+
+    let mut sprite = q_hero_sprite.single_mut();
 
     combat_status.value = false;
     q_mushroom.for_each_mut(|mushroom| {
@@ -323,9 +326,20 @@ fn hero_attack_system(
             }
 
             mushroom.hp -= hero.0.atk;
-            attack_timer.value = 1.0 / hero.0.atk_speed;
         }
-    })
+    });
+
+    if combat_status.value {
+        sprite.color.set_r(0.0);
+        sprite.color.set_g(1.0);
+        sprite.color.set_b(1.0);
+    } else {
+        attack_timer.value = 1.0 / hero.0.atk_speed;
+
+        sprite.color.set_r(1.0);
+        sprite.color.set_g(1.0);
+        sprite.color.set_b(1.0);
+    }
 }
 
 fn attack_timer_update_system(mut q_attack_timer: Query<&mut AttackTimer>, time: Res<Time>) {
@@ -453,6 +467,7 @@ fn main() {
         })
         .add_systems(PreStartup, load_assets_system)
         .add_systems(Startup, (setup_system, setup_ui_system))
+        .add_systems(PreUpdate, hero_attack_system)
         .add_systems(
             Update,
             (
@@ -463,7 +478,6 @@ fn main() {
                 spore_text_update_system,
                 hero_movement_system,
                 hero_level_system,
-                hero_attack_system,
                 attack_timer_update_system,
             ),
         )
