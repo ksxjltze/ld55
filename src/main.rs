@@ -122,6 +122,9 @@ struct Hero {
 #[derive(Component)]
 struct SporeText;
 
+#[derive(Component)]
+struct HeroHPText;
+
 fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res<AssetServer>) {
     let mushroom_sprite_asset: Handle<Image> = asset_server.load("boi.png");
     let mushroom_base_sprite_asset: Handle<Image> = asset_server.load("base.png");
@@ -191,6 +194,33 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                     },
                 ),
                 SporeText,
+            ));
+        });
+
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(20.0),
+                height: Val::Percent(10.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceAround,
+                left: Val::Percent(80.0),
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Hero HP:",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 40.0,
+                        // Alpha channel of the color controls transparency.
+                        color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                    },
+                ),
+                HeroHPText,
             ));
         });
 }
@@ -459,6 +489,15 @@ fn spore_text_update_system(
     text.sections[0].value = format!("Spores: {spore_count}");
 }
 
+fn hero_hp_text_update_system(
+    mut q_hero_hp_text: Query<&mut Text, With<HeroHPText>>,
+    q_hero: Query<&Hero>,
+) {
+    let mut text = q_hero_hp_text.single_mut();
+    let hero_hp = q_hero.single().hp;
+
+    text.sections[0].value = format!("Hero HP: {hero_hp}");
+}
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -476,6 +515,7 @@ fn main() {
                 mushroom_death_system,
                 mushroom_attack_system,
                 spore_text_update_system,
+                hero_hp_text_update_system,
                 hero_movement_system,
                 hero_level_system,
                 attack_timer_update_system,
