@@ -72,6 +72,11 @@ struct AttackTimer {
 }
 
 #[derive(Component)]
+struct InCombat {
+    value: bool,
+}
+
+#[derive(Component)]
 struct Mushroom {
     hp: f32,
     atk: f32,
@@ -252,6 +257,7 @@ fn setup_system(
             next_level_exp: HERO_BASE_EXP_REQUIRED,
         },
         AttackTimer { value: 0.0 },
+        InCombat { value: false },
     ));
 
     commands.spawn(Spores {
@@ -272,8 +278,14 @@ fn setup_system(
     ));
 }
 
-fn hero_movement_system(mut q_hero: Query<(&mut Hero, &mut Transform)>, time: Res<Time>) {
+fn hero_movement_system(
+    mut q_hero: Query<(&mut Hero, &mut Transform, &InCombat)>,
+    time: Res<Time>,
+) {
     let mut hero = q_hero.single_mut();
+    if hero.2.value {
+        return;
+    }
     hero.1.translation.x -= time.delta_seconds() * hero.0.move_speed;
 }
 
@@ -288,30 +300,42 @@ fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
 }
 
 fn hero_attack_system(
-    mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer)>,
+    mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer, &mut InCombat)>,
     mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
 ) {
     let hero = q_hero.single_mut();
+    let mut combat_status = hero.3;
     let mut attack_timer = hero.2;
 
+    combat_status.value = false;
     q_mushroom.for_each_mut(|mushroom| {
         let mushroom_transform = mushroom.1;
         let mut mushroom = mushroom.0;
 
         let distance = hero.1.translation.x - mushroom_transform.translation.x;
-
-        if attack_timer.value > 0.0 {
-            return;
-        }
-
         if distance <= hero.0.atk_range {
+            combat_status.value = true;
+
+            if attack_timer.value > 0.0 {
+                return;
+            }
+
             mushroom.hp -= hero.0.atk;
             attack_timer.value = 1.0 / hero.0.atk_speed;
         }
     })
 }
 
-fn mushroom_death_system(mut commands: Commands, mut q_mushroom: Query<(Entity, &mut Transform, &mut Mushroom)>) {
+fn attack_timer_update_system(mut q_attack_timer: Query<&mut AttackTimer>, time: Res<Time>) {
+    q_attack_timer.for_each_mut(|mut timer| {
+        timer.value -= time.delta_seconds();
+    });
+}
+
+fn mushroom_death_system(
+    mut commands: Commands,
+    mut q_mushroom: Query<(Entity, &mut Transform, &mut Mushroom)>,
+) {
     q_mushroom.for_each_mut(|mushroom| {
         if mushroom.2.hp <= 0.0 {
             commands.entity(mushroom.0).despawn();
@@ -319,7 +343,7 @@ fn mushroom_death_system(mut commands: Commands, mut q_mushroom: Query<(Entity, 
     })
 }
 
-fn mushroom_summon_system(
+fn mushroom_spawn_system(
     mut commands: Commands,
     image_manager: Res<ImageManager>,
     q_mushroom_base: Query<&Transform, With<MushroomBase>>,
@@ -348,16 +372,61 @@ fn mushroom_summon_system(
                 ..default()
             },
             Mushroom::default(),
+            AttackTimer { value: 0.0 },
+            InCombat { value: false },
         ));
     }
 }
 
-fn mushroom_attack_system(mut q_mushroom: Query<(&mut Transform, &Mushroom)>, time: Res<Time>) {
-    q_mushroom.for_each_mut(|mut mushroom| {
+fn mushroom_movement_system(
+    mut q_mushroom: Query<(&mut Transform, &Mushroom, &InCombat)>,
+    time: Res<Time>,
+) {
+    q_mushroom.for_each_mut(|mushroom| {
         let mut transform = mushroom.0;
         let mushroom_speed = mushroom.1.move_speed;
+        let combat_status = mushroom.2.value;
 
+        if combat_status {
+            return;
+        }
         transform.translation.x += mushroom_speed * time.delta_seconds();
+    });
+}
+
+fn mushroom_attack_system(
+    mut q_hero: Query<(&mut Hero, &mut Transform)>,
+    mut q_mushroom: Query<
+        (
+            &mut Mushroom,
+            &mut Transform,
+            &mut AttackTimer,
+            &mut InCombat,
+        ),
+        Without<Hero>,
+    >,
+) {
+    let mut hero = q_hero.single_mut();
+
+    q_mushroom.for_each_mut(|mushroom_data| {
+        let mushroom_transform = mushroom_data.1;
+        let mushroom = mushroom_data.0;
+        let mut attack_timer = mushroom_data.2;
+        let mut combat_status = mushroom_data.3;
+
+        let distance = hero.1.translation.x - mushroom_transform.translation.x;
+        combat_status.value = false;
+
+        if distance <= mushroom.atk_range {
+            combat_status.value = true;
+
+            if attack_timer.value > 0.0 {
+                return;
+            }
+
+            hero.0.hp -= mushroom.atk;
+            attack_timer.value = 1.0 / mushroom.atk_speed;
+        }
     });
 }
 
@@ -382,13 +451,15 @@ fn main() {
         .add_systems(
             Update,
             (
-                mushroom_summon_system,
-                mushroom_attack_system,
+                mushroom_spawn_system,
+                mushroom_movement_system,
                 mushroom_death_system,
+                mushroom_attack_system,
                 spore_text_update_system,
                 hero_movement_system,
                 hero_level_system,
                 hero_attack_system,
+                attack_timer_update_system,
             ),
         )
         .run();
