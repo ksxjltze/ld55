@@ -369,6 +369,13 @@ fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
     if hero.exp >= hero.next_level_exp {
         hero.exp = 0.0;
         hero.level += 1;
+
+        hero.hp = hero.level as f32 * HERO_BASE_HP;
+        hero.atk = hero.level as f32 * HERO_BASE_ATK;
+        hero.move_speed = hero.level as f32 * HERO_BASE_MOVE_SPEED;
+        hero.atk_speed = hero.level as f32 * HERO_BASE_ATK_SPEED;
+        hero.atk_range = hero.level as f32 * HERO_BASE_ATK_RANGE;
+        hero.next_level_exp = hero.level as f32 * HERO_BASE_EXP_REQUIRED;
     }
 }
 
