@@ -1,10 +1,12 @@
 use bevy::{prelude::*, transform::commands, utils::HashMap, window::PrimaryWindow};
-use std::ops::Index;
+use rand::Rng;
+use std::{ops::Index, thread::spawn};
 
 const GLOBAL_SCALE: f32 = 1.0;
 const TILE_SIZE: f32 = 64.0;
 const INITIAL_SPORE_COUNT: i32 = 10;
 
+//HERO
 const HERO_BASE_HP: f32 = 1000.0;
 const HERO_BASE_ATK: f32 = 10.0;
 const HERO_BASE_MOVE_SPEED: f32 = 20.0;
@@ -12,7 +14,9 @@ const HERO_BASE_ATK_SPEED: f32 = 1.0;
 const HERO_BASE_ATK_RANGE: f32 = 50.0;
 const HERO_BASE_LEVEL: i32 = 1;
 const HERO_BASE_EXP_REQUIRED: f32 = 100.0;
+const HERO_EXP_PER_SECOND: f32 = 0.5;
 
+//MUSHROOM
 const MUSHROOM_BASE_HP: f32 = 10.0;
 const MUSHROOM_BASE_ATK: f32 = 1.0;
 const MUSHROOM_BASE_MOVE_SPEED: f32 = 100.0;
@@ -21,7 +25,15 @@ const MUSHROOM_BASE_ATK_RANGE: f32 = 50.0;
 const MUSHROOM_BASE_SPORE_COUNT: i32 = 2;
 const MUSHROOM_BASE_EXP_DROP: f32 = 1.0;
 
-const HERO_EXP_PER_SECOND: f32 = 0.5;
+const MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT: f32 = 5.0;
+
+//UI
+const NORMAL_BUTTON: Color = Color::rgb(1.0, 1.0, 1.0);
+const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
+const PRESSED_BUTTON: Color = Color::rgb(0.7, 0.75, 0.5);
+
+//Etc
+const BASE_MUSHROOMS_PER_CLICK: i32 = 2;
 
 #[derive(Eq, Hash, PartialEq)]
 enum ImageType {
@@ -65,6 +77,16 @@ impl Index<ImageType> for ImageManager {
 struct GameCamera;
 
 #[derive(Component)]
+struct UpgradeSporeCountButton;
+#[derive(Component)]
+struct UpgradeSporeCountButtonText;
+
+#[derive(Component)]
+struct UpgradeMushroomsPerClickButton;
+#[derive(Component)]
+struct UpgradeMushroomsPerClickButtonText;
+
+#[derive(Component)]
 struct MushroomBase;
 
 #[derive(Component)]
@@ -98,6 +120,28 @@ impl Default for Mushroom {
             atk_range: MUSHROOM_BASE_ATK_RANGE,
             spore_count: MUSHROOM_BASE_SPORE_COUNT,
             xp_drop: MUSHROOM_BASE_EXP_DROP,
+        }
+    }
+}
+
+impl Copy for Mushroom {}
+impl Clone for Mushroom {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+#[derive(Component)]
+struct MushroomManager {
+    mushroom_template: Mushroom,
+    spawn_count: i32,
+}
+
+impl Default for MushroomManager {
+    fn default() -> Self {
+        MushroomManager {
+            mushroom_template: Mushroom::default(),
+            spawn_count: BASE_MUSHROOMS_PER_CLICK,
         }
     }
 }
@@ -179,6 +223,8 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 
 fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font_handle = asset_server.load("fonts/Roboto-Regular.ttf");
+
+    //Spores
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -207,6 +253,7 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
             ));
         });
 
+    //Hero stuff
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -263,6 +310,89 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ),
                 HeroLevelText,
             ));
+        });
+
+    //Upgrades
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(80.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                left: Val::Percent(10.0),
+                top: Val::Percent(30.0),
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(180.0),
+                            height: Val::Px(75.0),
+                            border: UiRect::all(Val::Px(2.0)),
+                            // horizontally center child text
+                            justify_content: JustifyContent::Center,
+                            // vertically center child text
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        border_color: BorderColor(Color::BLACK),
+                        background_color: NORMAL_BUTTON.into(),
+                        ..default()
+                    },
+                    UpgradeSporeCountButton,
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            format!("Spore Count: {MUSHROOM_BASE_SPORE_COUNT}"),
+                            TextStyle {
+                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                                font_size: 24.0,
+                                color: Color::BLACK,
+                            },
+                        ),
+                        UpgradeSporeCountButtonText,
+                    ));
+                });
+        })
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(240.0),
+                            height: Val::Px(75.0),
+                            border: UiRect::all(Val::Px(2.0)),
+                            // horizontally center child text
+                            justify_content: JustifyContent::Center,
+                            // vertically center child text
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        border_color: BorderColor(Color::BLACK),
+                        background_color: NORMAL_BUTTON.into(),
+                        ..default()
+                    },
+                    UpgradeMushroomsPerClickButton,
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            format!("Mushrooms per click: {BASE_MUSHROOMS_PER_CLICK}"),
+                            TextStyle {
+                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
+                                font_size: 24.0,
+                                color: Color::BLACK,
+                            },
+                        ),
+                        UpgradeMushroomsPerClickButtonText,
+                    ));
+                });
         });
 }
 
@@ -349,6 +479,99 @@ fn setup_system(
         },
         MushroomBase,
     ));
+
+    commands.spawn(MushroomManager {
+        ..Default::default()
+    });
+}
+
+fn upgrade_spore_count_button_system(
+    mut q_interaction: Query<
+        &Interaction,
+        (
+            Changed<Interaction>,
+            With<Button>,
+            With<UpgradeSporeCountButton>,
+        ),
+    >,
+    mut q_mushroom_manager: Query<&mut MushroomManager>,
+    mut q_spore_count_button_text: Query<&mut Text, With<UpgradeSporeCountButtonText>>,
+) {
+    let mut manager = q_mushroom_manager.single_mut();
+    let mut text = q_spore_count_button_text.single_mut();
+
+    for interaction in &mut q_interaction {
+        match *interaction {
+            Interaction::Pressed => {
+                manager.mushroom_template.spore_count += 1;
+                let spore_count = manager.mushroom_template.spore_count;
+                text.sections[0].value = format!("Spore Count: {spore_count}");
+            }
+            Interaction::Hovered => {}
+            Interaction::None => {}
+        }
+    }
+}
+
+fn upgrade_mushrooms_per_click_button_system(
+    mut q_interaction: Query<
+        &Interaction,
+        (
+            Changed<Interaction>,
+            With<Button>,
+            With<UpgradeSporeCountButton>,
+        ),
+    >,
+    mut q_mushroom_manager: Query<&mut MushroomManager>,
+    mut q_mushrooms_per_click_button_text: Query<
+        &mut Text,
+        With<UpgradeMushroomsPerClickButtonText>,
+    >,
+) {
+    let mut manager = q_mushroom_manager.single_mut();
+    let mut text = q_mushrooms_per_click_button_text.single_mut();
+
+    for interaction in &mut q_interaction {
+        match *interaction {
+            Interaction::Pressed => {
+                manager.spawn_count += 1;
+
+                let spawn_count = manager.spawn_count;
+                text.sections[0].value = format!("Mushrooms per click: {spawn_count}");
+            }
+            Interaction::Hovered => {}
+            Interaction::None => {}
+        }
+    }
+}
+
+fn button_system(
+    mut interaction_query: Query<
+        (
+            &Interaction,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &Children,
+        ),
+        (Changed<Interaction>, With<Button>),
+    >,
+) {
+    for (interaction, mut color, mut border_color, _children) in &mut interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = PRESSED_BUTTON.into();
+                border_color.0 = Color::RED;
+            }
+            Interaction::Hovered => {
+                *color = HOVERED_BUTTON.into();
+                border_color.0 = Color::WHITE;
+            }
+            Interaction::None => {
+                *color = NORMAL_BUTTON.into();
+                border_color.0 = Color::BLACK;
+            }
+        }
+    }
 }
 
 fn hero_movement_system(
@@ -383,8 +606,17 @@ fn hero_attack_system(
     mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer, &mut InCombat)>,
     mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
     mut q_hero_sprite: Query<&mut Sprite, With<Hero>>,
+    q_mushroom_base: Query<&Transform, (With<MushroomBase>, Without<Hero>, Without<Mushroom>)>,
 ) {
     let hero = q_hero.single_mut();
+    let mushroom_base = q_mushroom_base.single();
+
+    let distance_to_base = hero.1.translation.x - mushroom_base.translation.x;
+    if distance_to_base <= 1.0 {
+        //TODO: GAME OVER
+        info!("GAME OVER");
+    }
+
     let mut combat_status = hero.3;
     let mut attack_timer = hero.2;
 
@@ -429,16 +661,18 @@ fn attack_timer_update_system(mut q_attack_timer: Query<&mut AttackTimer>, time:
 fn mushroom_death_system(
     mut commands: Commands,
     mut q_mushroom: Query<(Entity, &mut Transform, &mut Mushroom)>,
+    mut q_mushroom_manager: Query<&mut MushroomManager>,
     mut q_spores: Query<&mut Spores>,
     mut q_hero: Query<&mut Hero>,
 ) {
     let mut spores = q_spores.single_mut();
     let mut hero = q_hero.single_mut();
+    let mushroom_manager = q_mushroom_manager.single_mut();
 
     q_mushroom.for_each_mut(|mushroom| {
         if mushroom.2.hp <= 0.0 {
             commands.entity(mushroom.0).despawn();
-            spores.count += mushroom.2.spore_count;
+            spores.count += mushroom_manager.mushroom_template.spore_count;
             hero.exp += mushroom.2.xp_drop;
         }
     })
@@ -449,33 +683,51 @@ fn mushroom_spawn_system(
     image_manager: Res<ImageManager>,
     q_mushroom_base: Query<&Transform, With<MushroomBase>>,
     mut q_spores: Query<&mut Spores>,
+    q_mushroom_manager: Query<&MushroomManager>,
     mouse: Res<Input<MouseButton>>,
 ) {
     let mushroom_sprite = &image_manager[ImageType::Mushroom];
     let mushroom_base_position = q_mushroom_base.single().translation;
 
     let mut spores = q_spores.single_mut();
+    let mushroom_manager = q_mushroom_manager.single();
 
     if spores.count <= 0 {
         return;
     }
 
     if mouse.just_pressed(MouseButton::Left) {
-        spores.count -= 1;
-        commands.spawn((
-            SpriteBundle {
-                transform: Transform {
-                    translation: Vec3::new(mushroom_base_position.x, mushroom_base_position.y, 0.0),
-                    scale: (Vec3::splat(GLOBAL_SCALE)),
+        let mut rng = rand::thread_rng();
+        let mut spawn_count = mushroom_manager.spawn_count;
+
+        if spores.count - spawn_count < 0 {
+            spawn_count = spores.count;
+        }
+
+        for _i in 0..spawn_count {
+            let random_offset: f32 = rng.gen();
+
+            spores.count -= 1;
+            commands.spawn((
+                SpriteBundle {
+                    transform: Transform {
+                        translation: Vec3::new(
+                            mushroom_base_position.x
+                                + random_offset * MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT,
+                            mushroom_base_position.y,
+                            0.0,
+                        ),
+                        scale: (Vec3::splat(GLOBAL_SCALE)),
+                        ..default()
+                    },
+                    texture: mushroom_sprite.handle(),
                     ..default()
                 },
-                texture: mushroom_sprite.handle(),
-                ..default()
-            },
-            Mushroom::default(),
-            AttackTimer { value: 0.0 },
-            InCombat { value: false },
-        ));
+                mushroom_manager.mushroom_template,
+                AttackTimer { value: 0.0 },
+                InCombat { value: false },
+            ));
+        }
     }
 }
 
@@ -583,17 +835,23 @@ fn main() {
         .add_systems(
             Update,
             (
+                //MUSHROOM
                 mushroom_spawn_system,
                 mushroom_movement_system,
                 mushroom_death_system,
                 mushroom_attack_system,
                 spore_text_update_system,
+                //HERO
                 hero_hp_text_update_system,
                 hero_exp_text_update_system,
                 hero_level_text_update_system,
                 hero_movement_system,
                 hero_level_system,
                 attack_timer_update_system,
+                //UI
+                button_system,
+                upgrade_spore_count_button_system,
+                upgrade_mushrooms_per_click_button_system,
             ),
         )
         .run();
