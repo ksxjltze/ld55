@@ -19,8 +19,9 @@ const MUSHROOM_BASE_MOVE_SPEED: f32 = 100.0;
 const MUSHROOM_BASE_ATK_SPEED: f32 = 1.0;
 const MUSHROOM_BASE_ATK_RANGE: f32 = 50.0;
 const MUSHROOM_BASE_SPORE_COUNT: i32 = 2;
+const MUSHROOM_BASE_EXP_DROP: f32 = 1.0;
 
-const HERO_EXP_PER_SECOND: f32 = 1.0;
+const HERO_EXP_PER_SECOND: f32 = 0.5;
 
 #[derive(Eq, Hash, PartialEq)]
 enum ImageType {
@@ -84,6 +85,7 @@ struct Mushroom {
     atk_speed: f32,
     atk_range: f32,
     spore_count: i32,
+    xp_drop: f32,
 }
 
 impl Default for Mushroom {
@@ -95,6 +97,7 @@ impl Default for Mushroom {
             atk_speed: MUSHROOM_BASE_ATK_SPEED,
             atk_range: MUSHROOM_BASE_ATK_RANGE,
             spore_count: MUSHROOM_BASE_SPORE_COUNT,
+            xp_drop: MUSHROOM_BASE_EXP_DROP,
         }
     }
 }
@@ -124,6 +127,12 @@ struct SporeText;
 
 #[derive(Component)]
 struct HeroHPText;
+
+#[derive(Component)]
+struct HeroEXPText;
+
+#[derive(Component)]
+struct HeroLevelText;
 
 fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res<AssetServer>) {
     let mushroom_sprite_asset: Handle<Image> = asset_server.load("boi.png");
@@ -176,8 +185,9 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                 width: Val::Percent(20.0),
                 height: Val::Percent(10.0),
                 align_items: AlignItems::Center,
-                justify_content: JustifyContent::SpaceAround,
-                left: Val::Percent(1.0),
+                justify_content: JustifyContent::Start,
+                left: Val::Percent(5.0),
+                top: Val::Percent(5.0),
                 ..default()
             },
             ..default()
@@ -200,10 +210,13 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn(NodeBundle {
             style: Style {
-                width: Val::Percent(20.0),
-                height: Val::Percent(10.0),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::SpaceAround,
+                width: Val::Percent(30.0),
+                height: Val::Percent(20.0),
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Start,
+                justify_content: JustifyContent::Start,
+                top: Val::Percent(5.0),
                 left: Val::Percent(80.0),
                 ..default()
             },
@@ -215,12 +228,40 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                     "Hero HP:",
                     TextStyle {
                         font: font_handle.clone(),
-                        font_size: 40.0,
+                        font_size: 20.0,
                         // Alpha channel of the color controls transparency.
                         color: Color::rgba(1.0, 1.0, 1.0, 1.0),
                     },
                 ),
                 HeroHPText,
+            ));
+        })
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Hero EXP:",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 20.0,
+                        // Alpha channel of the color controls transparency.
+                        color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                    },
+                ),
+                HeroEXPText,
+            ));
+        })
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Hero Level:",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 20.0,
+                        // Alpha channel of the color controls transparency.
+                        color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                    },
+                ),
+                HeroLevelText,
             ));
         });
 }
@@ -382,12 +423,16 @@ fn mushroom_death_system(
     mut commands: Commands,
     mut q_mushroom: Query<(Entity, &mut Transform, &mut Mushroom)>,
     mut q_spores: Query<&mut Spores>,
+    mut q_hero: Query<&mut Hero>,
 ) {
     let mut spores = q_spores.single_mut();
+    let mut hero = q_hero.single_mut();
+
     q_mushroom.for_each_mut(|mushroom| {
         if mushroom.2.hp <= 0.0 {
             commands.entity(mushroom.0).despawn();
             spores.count += mushroom.2.spore_count;
+            hero.exp += mushroom.2.xp_drop;
         }
     })
 }
@@ -498,6 +543,27 @@ fn hero_hp_text_update_system(
 
     text.sections[0].value = format!("Hero HP: {hero_hp}");
 }
+
+fn hero_exp_text_update_system(
+    mut q_hero_exp_text: Query<&mut Text, With<HeroEXPText>>,
+    q_hero: Query<&Hero>,
+) {
+    let mut text = q_hero_exp_text.single_mut();
+    let hero_exp = q_hero.single().exp;
+
+    text.sections[0].value = format!("Hero EXP: {hero_exp}");
+}
+
+fn hero_level_text_update_system(
+    mut q_hero_level_text: Query<&mut Text, With<HeroLevelText>>,
+    q_hero: Query<&Hero>,
+) {
+    let mut text = q_hero_level_text.single_mut();
+    let hero_level = q_hero.single().level;
+
+    text.sections[0].value = format!("Hero Level: {hero_level}");
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -516,6 +582,8 @@ fn main() {
                 mushroom_attack_system,
                 spore_text_update_system,
                 hero_hp_text_update_system,
+                hero_exp_text_update_system,
+                hero_level_text_update_system,
                 hero_movement_system,
                 hero_level_system,
                 attack_timer_update_system,
