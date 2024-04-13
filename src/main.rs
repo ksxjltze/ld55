@@ -3,8 +3,23 @@ use std::ops::Index;
 
 const GLOBAL_SCALE: f32 = 1.0;
 const TILE_SIZE: f32 = 64.0;
-const MUSHROOM_SPEED: f32 = 100.0;
 const INITIAL_SPORE_COUNT: i32 = 10;
+
+const HERO_BASE_HP: f32 = 1000.0;
+const HERO_BASE_ATK: f32 = 10.0;
+const HERO_BASE_MOVE_SPEED: f32 = 20.0;
+const HERO_BASE_ATK_SPEED: f32 = 1.0;
+const HERO_BASE_ATK_RANGE: f32 = 10.0;
+const HERO_BASE_LEVEL: i32 = 1;
+const HERO_BASE_EXP_REQUIRED: f32 = 100.0;
+
+const MUSHROOM_BASE_HP: f32 = 10.0;
+const MUSHROOM_BASE_ATK: f32 = 1.0;
+const MUSHROOM_BASE_MOVE_SPEED: f32 = 100.0;
+const MUSHROOM_BASE_ATK_SPEED: f32 = 1.0;
+const MUSHROOM_BASE_ATK_RANGE: f32 = 5.0;
+
+const HERO_EXP_PER_SECOND: f32 = 1.0;
 
 #[derive(Eq, Hash, PartialEq)]
 enum ImageType {
@@ -52,7 +67,30 @@ struct GameCamera;
 struct MushroomBase;
 
 #[derive(Component)]
-struct Mushroom;
+struct AttackTimer {
+    value: f32,
+}
+
+#[derive(Component)]
+struct Mushroom {
+    hp: f32,
+    atk: f32,
+    move_speed: f32,
+    atk_speed: f32,
+    atk_range: f32,
+}
+
+impl Default for Mushroom {
+    fn default() -> Self {
+        Mushroom {
+            hp: MUSHROOM_BASE_HP,
+            atk: MUSHROOM_BASE_ATK,
+            move_speed: MUSHROOM_BASE_MOVE_SPEED,
+            atk_speed: MUSHROOM_BASE_ATK_SPEED,
+            atk_range: MUSHROOM_BASE_ATK_RANGE,
+        }
+    }
+}
 
 #[derive(Component)]
 struct Ground;
@@ -63,12 +101,25 @@ struct Spores {
 }
 
 #[derive(Component)]
+struct Hero {
+    hp: f32,
+    atk: f32,
+    move_speed: f32,
+    atk_speed: f32,
+    atk_range: f32,
+    level: i32,
+    exp: f32,
+    next_level_exp: f32,
+}
+
+#[derive(Component)]
 struct SporeText;
 
 fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res<AssetServer>) {
     let mushroom_sprite_asset: Handle<Image> = asset_server.load("boi.png");
     let mushroom_base_sprite_asset: Handle<Image> = asset_server.load("base.png");
     let ground_sprite_asset: Handle<Image> = asset_server.load("ground.png");
+    let hero_sprite_asset: Handle<Image> = asset_server.load("hero.png");
 
     image_manager.images.insert(
         ImageType::Mushroom,
@@ -96,6 +147,15 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
             height: 0,
         },
     );
+
+    image_manager.images.insert(
+        ImageType::Hero,
+        Sprite {
+            image_handle: hero_sprite_asset,
+            width: 0,
+            height: 0,
+        },
+    );
 }
 
 fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -113,15 +173,18 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         })
         .with_children(|parent| {
-            parent.spawn((TextBundle::from_section(
-                "Spores:",
-                TextStyle {
-                    font: font_handle.clone(),
-                    font_size: 40.0,
-                    // Alpha channel of the color controls transparency.
-                    color: Color::rgba(1.0, 1.0, 1.0, 1.0),
-                },
-            ), SporeText));
+            parent.spawn((
+                TextBundle::from_section(
+                    "Spores:",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 40.0,
+                        // Alpha channel of the color controls transparency.
+                        color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                    },
+                ),
+                SporeText,
+            ));
         });
 }
 
@@ -132,6 +195,7 @@ fn setup_system(
 ) {
     let mushroom_base_sprite = &image_manager[ImageType::MushroomBase];
     let ground_sprite = &image_manager[ImageType::Ground];
+    let hero_sprite = &image_manager[ImageType::Hero];
 
     let window = q_windows.single();
     let width = window.width();
@@ -170,6 +234,33 @@ fn setup_system(
     commands.spawn((
         SpriteBundle {
             transform: Transform {
+                translation: Vec3::new(x_offset - TILE_SIZE, initial_height, 0.0),
+                scale: (Vec3::splat(GLOBAL_SCALE)),
+                ..default()
+            },
+            texture: hero_sprite.handle(),
+            ..default()
+        },
+        Hero {
+            hp: HERO_BASE_HP,
+            atk: HERO_BASE_ATK,
+            move_speed: HERO_BASE_MOVE_SPEED,
+            atk_speed: HERO_BASE_ATK_SPEED,
+            atk_range: HERO_BASE_ATK_RANGE,
+            level: HERO_BASE_LEVEL,
+            exp: 0.0,
+            next_level_exp: HERO_BASE_EXP_REQUIRED,
+        },
+        AttackTimer { value: 0.0 },
+    ));
+
+    commands.spawn(Spores {
+        count: INITIAL_SPORE_COUNT,
+    });
+
+    commands.spawn((
+        SpriteBundle {
+            transform: Transform {
                 translation: Vec3::new(-x_offset + TILE_SIZE, initial_height, 0.0),
                 scale: (Vec3::splat(GLOBAL_SCALE)),
                 ..default()
@@ -179,10 +270,53 @@ fn setup_system(
         },
         MushroomBase,
     ));
+}
 
-    commands.spawn(Spores {
-        count: INITIAL_SPORE_COUNT,
-    });
+fn hero_movement_system(mut q_hero: Query<(&mut Hero, &mut Transform)>, time: Res<Time>) {
+    let mut hero = q_hero.single_mut();
+    hero.1.translation.x -= time.delta_seconds() * hero.0.move_speed;
+}
+
+fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
+    let mut hero = q_hero.single_mut();
+    hero.exp += time.delta_seconds() * HERO_EXP_PER_SECOND;
+
+    if hero.exp >= hero.next_level_exp {
+        hero.exp = 0.0;
+        hero.level += 1;
+    }
+}
+
+fn hero_attack_system(
+    mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer)>,
+    mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
+) {
+    let hero = q_hero.single_mut();
+    let mut attack_timer = hero.2;
+
+    q_mushroom.for_each_mut(|mushroom| {
+        let mushroom_transform = mushroom.1;
+        let mut mushroom = mushroom.0;
+
+        let distance = hero.1.translation.x - mushroom_transform.translation.x;
+
+        if attack_timer.value > 0.0 {
+            return;
+        }
+
+        if distance <= hero.0.atk_range {
+            mushroom.hp -= hero.0.atk;
+            attack_timer.value = 1.0 / hero.0.atk_speed;
+        }
+    })
+}
+
+fn mushroom_death_system(mut commands: Commands, mut q_mushroom: Query<(Entity, &mut Transform, &mut Mushroom)>) {
+    q_mushroom.for_each_mut(|mushroom| {
+        if mushroom.2.hp <= 0.0 {
+            commands.entity(mushroom.0).despawn();
+        }
+    })
 }
 
 fn mushroom_summon_system(
@@ -213,18 +347,24 @@ fn mushroom_summon_system(
                 texture: mushroom_sprite.handle(),
                 ..default()
             },
-            Mushroom,
+            Mushroom::default(),
         ));
     }
 }
 
-fn mushroom_attack_system(mut q_mushroom: Query<&mut Transform, With<Mushroom>>, time: Res<Time>) {
-    q_mushroom.for_each_mut(|mut transform| {
-        transform.translation.x += MUSHROOM_SPEED * time.delta_seconds();
+fn mushroom_attack_system(mut q_mushroom: Query<(&mut Transform, &Mushroom)>, time: Res<Time>) {
+    q_mushroom.for_each_mut(|mut mushroom| {
+        let mut transform = mushroom.0;
+        let mushroom_speed = mushroom.1.move_speed;
+
+        transform.translation.x += mushroom_speed * time.delta_seconds();
     });
 }
 
-fn spore_text_update_system(mut q_spore_text: Query<&mut Text, With<SporeText>>, q_spores: Query<&Spores>) {
+fn spore_text_update_system(
+    mut q_spore_text: Query<&mut Text, With<SporeText>>,
+    q_spores: Query<&Spores>,
+) {
     let mut text = q_spore_text.single_mut();
     let spore_count = q_spores.single().count;
 
@@ -239,6 +379,17 @@ fn main() {
         })
         .add_systems(PreStartup, load_assets_system)
         .add_systems(Startup, (setup_system, setup_ui_system))
-        .add_systems(Update, (mushroom_summon_system, mushroom_attack_system, spore_text_update_system))
+        .add_systems(
+            Update,
+            (
+                mushroom_summon_system,
+                mushroom_attack_system,
+                mushroom_death_system,
+                spore_text_update_system,
+                hero_movement_system,
+                hero_level_system,
+                hero_attack_system,
+            ),
+        )
         .run();
 }
