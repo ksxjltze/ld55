@@ -13,8 +13,8 @@ const HERO_BASE_MOVE_SPEED: f32 = 10.0;
 const HERO_BASE_ATK_SPEED: f32 = 0.5;
 const HERO_BASE_ATK_RANGE: f32 = 50.0;
 const HERO_BASE_LEVEL: i32 = 1;
-const HERO_BASE_EXP_REQUIRED: f32 = 300.0;
-const HERO_EXP_PER_SECOND: f32 = 0.5;
+const HERO_BASE_EXP_REQUIRED: f32 = 200.0;
+const HERO_EXP_PER_SECOND: f32 = 1.0;
 
 //MUSHROOM
 const MUSHROOM_BASE_HP: f32 = 10.0;
@@ -22,7 +22,7 @@ const MUSHROOM_BASE_ATK: f32 = 0.1;
 const MUSHROOM_BASE_MOVE_SPEED: f32 = 100.0;
 const MUSHROOM_BASE_ATK_SPEED: f32 = 1.0;
 const MUSHROOM_BASE_ATK_RANGE: f32 = 50.0;
-const MUSHROOM_BASE_SPORE_COUNT: i32 = 2;
+const MUSHROOM_BASE_SPORE_COUNT: i32 = 3;
 const MUSHROOM_BASE_EXP_DROP: f32 = 1.0;
 
 const MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT: f32 = 5.0;
@@ -36,7 +36,14 @@ const MUSHROOM_LORD_BASE_ATK_RANGE: f32 = 100.0;
 const MUSHROOM_LORD_BASE_SPORE_COUNT: i32 = 0;
 const MUSHROOM_LORD_BASE_EXP_DROP: f32 = 0.0;
 const MUSHROOM_LORD_SCALE: f32 = 3.0;
-const MUSHROOM_LORD_SPORE_MULTIPLIER: f32 = 0.1;
+
+const MUSHROOM_LORD_SPORE_MULTIPLIER_HP: f32 = 1.0;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_ATK: f32 = 0.1;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED: f32 = 0.0;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED: f32 = 0.1;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE: f32 = 0.0;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_SPORE_COUNT: i32 = 0;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_EXP_DROP: f32 = 0.0;
 
 //UI
 const NORMAL_BUTTON: Color = Color::rgb(1.0, 1.0, 1.0);
@@ -46,18 +53,19 @@ const PRESSED_BUTTON: Color = Color::rgb(0.7, 0.75, 0.5);
 //Upgrades
 const UPGRADE_SPORE_COUNT_BASE_COST: i32 = 10;
 const UPGRADE_MUSHROOMS_PER_CLICK_BASE_COST: i32 = 100;
-const UPGRADE_MUSHROOM_HP_BASE_COST: i32 = 50;
+const UPGRADE_MUSHROOM_HP_BASE_COST: i32 = 500;
 const UPGRADE_MUSHROOM_ATK_BASE_COST: i32 = 100;
 const UPGRADE_MUSHROOM_ATK_SPEED_BASE_COST: i32 = 10;
 const UPGRADE_MUSHROOM_MOVE_SPEED_BASE_COST: i32 = 100;
 
 const UPGRADE_COST_BASE_MULTIPLIER: i32 = 2;
-const UPGRADE_COST_SPORE_COUNT_MULTIPLIER: i32 = 5;
-const UPGRADE_COST_MUSHROOMS_PER_CLICK_MULTIPLIER: i32 = 10;
+const UPGRADE_COST_SPORE_COUNT_MULTIPLIER: i32 = 3;
+const UPGRADE_COST_MUSHROOMS_PER_CLICK_MULTIPLIER: i32 = 3;
 
 //Summoning
 const SUMMON_BUTTON_INACTIVE_COLOR: BackgroundColor = BackgroundColor(Color::GRAY);
 const SUMMON_BUTTON_ACTIVE_COLOR: BackgroundColor = BackgroundColor(Color::WHITE);
+const SUMMON_MINIMUM_SPORE_COUNT: i32 = 10000;
 
 //Etc
 const BASE_MUSHROOMS_PER_CLICK: i32 = 1;
@@ -771,7 +779,10 @@ fn button_system(
 
 fn summon_button_system(
     mut commands: Commands,
-    mut q_summon_button_interaction: Query<&Interaction, With<SummonButton>>,
+    mut q_summon_button_interaction: Query<
+        (&Interaction, &mut BackgroundColor),
+        With<SummonButton>,
+    >,
     image_manager: Res<ImageManager>,
     q_mushroom_base: Query<&Transform, With<MushroomBase>>,
     mut q_summon_manager: Query<&mut SummonManager>,
@@ -782,14 +793,19 @@ fn summon_button_system(
     let mut summon_manager = q_summon_manager.single_mut();
     let mut spores = q_spores.single_mut();
 
-    for interaction in &mut q_summon_button_interaction {
+    for (interaction, mut background_color) in &mut q_summon_button_interaction {
+        if spores.count < SUMMON_MINIMUM_SPORE_COUNT {
+            return;
+        } else {
+            *background_color = SUMMON_BUTTON_ACTIVE_COLOR;
+        }
+
         match *interaction {
             Interaction::Pressed => {
                 if summon_manager.is_summoned {
                     return;
                 }
 
-                let spore_power = MUSHROOM_LORD_SPORE_MULTIPLIER * spores.count as f32;
                 commands.spawn((
                     SpriteBundle {
                         transform: Transform {
@@ -805,13 +821,13 @@ fn summon_button_system(
                         ..default()
                     },
                     Mushroom {
-                        hp: MUSHROOM_LORD_BASE_HP * spore_power,
-                        atk: MUSHROOM_LORD_BASE_ATK * spore_power,
-                        move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED * spore_power,
-                        atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED * spore_power,
-                        atk_range: MUSHROOM_LORD_BASE_ATK_RANGE * spore_power,
-                        spore_count: MUSHROOM_LORD_BASE_SPORE_COUNT * spore_power as i32,
-                        xp_drop: MUSHROOM_LORD_BASE_EXP_DROP * spore_power,
+                        hp: MUSHROOM_LORD_BASE_HP + MUSHROOM_LORD_BASE_HP * MUSHROOM_LORD_SPORE_MULTIPLIER_HP * spores.count as f32,
+                        atk: MUSHROOM_LORD_BASE_ATK + MUSHROOM_LORD_BASE_ATK  * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK * spores.count as f32,
+                        move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED + MUSHROOM_LORD_BASE_MOVE_SPEED  * MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED * spores.count as f32,
+                        atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED + MUSHROOM_LORD_BASE_ATK_SPEED * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED * spores.count as f32,
+                        atk_range: MUSHROOM_LORD_BASE_ATK_RANGE + MUSHROOM_LORD_BASE_ATK_RANGE * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE * spores.count as f32,
+                        spore_count: MUSHROOM_LORD_BASE_SPORE_COUNT,
+                        xp_drop: MUSHROOM_LORD_BASE_EXP_DROP,
                     },
                     AttackTimer { value: 0.0 },
                     InCombat { value: false },
