@@ -7,7 +7,7 @@ const TILE_SIZE: f32 = 64.0;
 const INITIAL_SPORE_COUNT: i32 = 15;
 
 //HERO
-const HERO_BASE_HP: f32 = 1000.0;
+const HERO_BASE_HP: f32 = 1000000.0;
 const HERO_BASE_ATK: f32 = 10.0;
 const HERO_BASE_MOVE_SPEED: f32 = 10.0;
 const HERO_BASE_ATK_SPEED: f32 = 0.5;
@@ -18,12 +18,12 @@ const HERO_EXP_PER_SECOND: f32 = 0.5;
 
 //MUSHROOM
 const MUSHROOM_BASE_HP: f32 = 10.0;
-const MUSHROOM_BASE_ATK: f32 = 0.1;
+const MUSHROOM_BASE_ATK: f32 = 0.01;
 const MUSHROOM_BASE_MOVE_SPEED: f32 = 100.0;
 const MUSHROOM_BASE_ATK_SPEED: f32 = 1.0;
 const MUSHROOM_BASE_ATK_RANGE: f32 = 50.0;
 const MUSHROOM_BASE_SPORE_COUNT: i32 = 2;
-const MUSHROOM_BASE_EXP_DROP: f32 = 0.5;
+const MUSHROOM_BASE_EXP_DROP: f32 = 1.0;
 
 const MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT: f32 = 5.0;
 
@@ -35,14 +35,18 @@ const PRESSED_BUTTON: Color = Color::rgb(0.7, 0.75, 0.5);
 //Upgrades
 const UPGRADE_SPORE_COUNT_BASE_COST: i32 = 10;
 const UPGRADE_MUSHROOMS_PER_CLICK_BASE_COST: i32 = 100;
-const UPGRADE_MUSHROOM_HP_BASE_COST: i32 = 10;
-const UPGRADE_MUSHROOM_ATK_BASE_COST: i32 = 10;
+const UPGRADE_MUSHROOM_HP_BASE_COST: i32 = 50;
+const UPGRADE_MUSHROOM_ATK_BASE_COST: i32 = 100;
 const UPGRADE_MUSHROOM_ATK_SPEED_BASE_COST: i32 = 10;
-const UPGRADE_MUSHROOM_MOVE_SPEED_BASE_COST: i32 = 10;
+const UPGRADE_MUSHROOM_MOVE_SPEED_BASE_COST: i32 = 100;
 
 const UPGRADE_COST_BASE_MULTIPLIER: i32 = 2;
 const UPGRADE_COST_SPORE_COUNT_MULTIPLIER: i32 = 10;
 const UPGRADE_COST_MUSHROOMS_PER_CLICK_MULTIPLIER: i32 = 10;
+
+//Summoning
+const SUMMON_BUTTON_INACTIVE_COLOR: BackgroundColor = BackgroundColor(Color::GRAY);
+const SUMMON_BUTTON_ACTIVE_COLOR: BackgroundColor = BackgroundColor(Color::WHITE);
 
 //Etc
 const BASE_MUSHROOMS_PER_CLICK: i32 = 1;
@@ -106,10 +110,8 @@ impl Clone for UpgradeButtonText {
     }
 }
 
-// #[derive(Component)]
-// struct UpgradeMushroomsPerClickButton;
-// #[derive(Component)]
-// struct UpgradeMushroomsPerClickButtonText;
+#[derive(Component)]
+struct SummonButton;
 
 #[derive(Component)]
 struct MushroomBase;
@@ -271,6 +273,7 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 
 fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font_handle = asset_server.load("fonts/Roboto-Regular.ttf");
+    let summoning_circle_image = asset_server.load("summon_circle.png");
 
     //Spores
     commands
@@ -436,7 +439,7 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::SpaceBetween,
                 left: Val::Percent(0.0),
-                top: Val::Percent(30.0),
+                top: Val::Percent(20.0),
                 ..default()
             },
             ..default()
@@ -497,6 +500,41 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
             format!("Move Speed: {MUSHROOM_BASE_MOVE_SPEED}"),
             upgrade_button_font_type.clone(),
         ));
+
+    //Summon commands
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                top: Val::Percent(37.5),
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn((
+                ButtonBundle {
+                    style: Style {
+                        width: Val::Px(128.0),
+                        height: Val::Px(128.0),
+                        flex_direction: FlexDirection::Column,
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    image: UiImage {
+                        texture: summoning_circle_image,
+                        ..default()
+                    },
+                    background_color: SUMMON_BUTTON_INACTIVE_COLOR,
+                    ..default()
+                },
+                SummonButton,
+            ));
+        });
 }
 
 fn setup_system(
@@ -703,6 +741,18 @@ fn button_system(
                 *color = NORMAL_BUTTON.into();
                 border_color.0 = Color::BLACK;
             }
+        }
+    }
+}
+
+fn summon_button_system(mut q_summon_button_interaction: Query<&Interaction, With<SummonButton>>) {
+    for (interaction) in &mut q_summon_button_interaction {
+        match *interaction {
+            Interaction::Pressed => {
+                info!("Boop");
+            }
+            Interaction::Hovered => {}
+            Interaction::None => {}
         }
     }
 }
@@ -984,6 +1034,7 @@ fn main() {
                 //UI
                 button_system,
                 upgrade_button_system,
+                summon_button_system,
             ),
         )
         .run();
