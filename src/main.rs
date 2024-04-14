@@ -27,6 +27,17 @@ const MUSHROOM_BASE_EXP_DROP: f32 = 1.0;
 
 const MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT: f32 = 5.0;
 
+//MUSHROOM LORD
+const MUSHROOM_LORD_BASE_HP: f32 = 1000.0;
+const MUSHROOM_LORD_BASE_ATK: f32 = 100.0;
+const MUSHROOM_LORD_BASE_MOVE_SPEED: f32 = 100.0;
+const MUSHROOM_LORD_BASE_ATK_SPEED: f32 = 1.0;
+const MUSHROOM_LORD_BASE_ATK_RANGE: f32 = 100.0;
+const MUSHROOM_LORD_BASE_SPORE_COUNT: i32 = 0;
+const MUSHROOM_LORD_BASE_EXP_DROP: f32 = 0.0;
+const MUSHROOM_LORD_SCALE: f32 = 3.0;
+const MUSHROOM_LORD_SPORE_MULTIPLIER: f32 = 0.1;
+
 //UI
 const NORMAL_BUTTON: Color = Color::rgb(1.0, 1.0, 1.0);
 const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
@@ -193,6 +204,17 @@ impl Default for MushroomManager {
             mushroom_template: Mushroom::default(),
             spawn_count: BASE_MUSHROOMS_PER_CLICK,
         }
+    }
+}
+
+#[derive(Component)]
+struct SummonManager {
+    is_summoned: bool,
+}
+
+impl Default for SummonManager {
+    fn default() -> Self {
+        SummonManager { is_summoned: false }
     }
 }
 
@@ -624,6 +646,8 @@ fn setup_system(
     commands.spawn(MushroomManager {
         ..Default::default()
     });
+
+    commands.spawn(SummonManager { ..default() });
 }
 
 fn upgrade_button_system(
@@ -745,11 +769,55 @@ fn button_system(
     }
 }
 
-fn summon_button_system(mut q_summon_button_interaction: Query<&Interaction, With<SummonButton>>) {
-    for (interaction) in &mut q_summon_button_interaction {
+fn summon_button_system(
+    mut commands: Commands,
+    mut q_summon_button_interaction: Query<&Interaction, With<SummonButton>>,
+    image_manager: Res<ImageManager>,
+    q_mushroom_base: Query<&Transform, With<MushroomBase>>,
+    mut q_summon_manager: Query<&mut SummonManager>,
+    mut q_spores: Query<&mut Spores>,
+) {
+    let mushroom_sprite = &image_manager[ImageType::Mushroom];
+    let mushroom_base_position = q_mushroom_base.single().translation;
+    let mut summon_manager = q_summon_manager.single_mut();
+    let mut spores = q_spores.single_mut();
+
+    for interaction in &mut q_summon_button_interaction {
         match *interaction {
             Interaction::Pressed => {
-                info!("Boop");
+                if summon_manager.is_summoned {
+                    return;
+                }
+
+                let spore_power = MUSHROOM_LORD_SPORE_MULTIPLIER * spores.count as f32;
+                commands.spawn((
+                    SpriteBundle {
+                        transform: Transform {
+                            translation: Vec3::new(
+                                mushroom_base_position.x + MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT,
+                                mushroom_base_position.y + 32.0 * (MUSHROOM_LORD_SCALE - 1.0),
+                                1.0,
+                            ),
+                            scale: (Vec3::splat(MUSHROOM_LORD_SCALE)),
+                            ..default()
+                        },
+                        texture: mushroom_sprite.handle(),
+                        ..default()
+                    },
+                    Mushroom {
+                        hp: MUSHROOM_LORD_BASE_HP * spore_power,
+                        atk: MUSHROOM_LORD_BASE_ATK * spore_power,
+                        move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED * spore_power,
+                        atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED * spore_power,
+                        atk_range: MUSHROOM_LORD_BASE_ATK_RANGE * spore_power,
+                        spore_count: MUSHROOM_LORD_BASE_SPORE_COUNT * spore_power as i32,
+                        xp_drop: MUSHROOM_LORD_BASE_EXP_DROP * spore_power,
+                    },
+                    AttackTimer { value: 0.0 },
+                    InCombat { value: false },
+                ));
+                spores.count = 0;
+                summon_manager.is_summoned = true;
             }
             Interaction::Hovered => {}
             Interaction::None => {}
