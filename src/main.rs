@@ -9,7 +9,7 @@ const INITIAL_SPORE_COUNT: i32 = 15;
 //HERO
 const HERO_BASE_HP: f32 = 1000.0;
 const HERO_BASE_ATK: f32 = 10.0;
-const HERO_BASE_MOVE_SPEED: f32 = 20.0;
+const HERO_BASE_MOVE_SPEED: f32 = 10.0;
 const HERO_BASE_ATK_SPEED: f32 = 1.0;
 const HERO_BASE_ATK_RANGE: f32 = 50.0;
 const HERO_BASE_LEVEL: i32 = 1;
@@ -35,6 +35,7 @@ const PRESSED_BUTTON: Color = Color::rgb(0.7, 0.75, 0.5);
 //Upgrades
 const UPGRADE_SPORE_COUNT_BASE_COST: i32 = 10;
 const UPGRADE_MUSHROOMS_PER_CLICK_BASE_COST: i32 = 100;
+const UPGRADE_MUSHROOM_HP_BASE_COST: i32 = 10;
 const UPGRADE_COST_BASE_MULTIPLIER: i32 = 10;
 
 //Etc
@@ -367,6 +368,51 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
         )
     };
 
+    let upgrade_button_font_type = asset_server.load("fonts/Roboto-Regular.ttf");
+    let create_upgrade_button = |width, height, upgrade_type, cost, text, font_type| {
+        return move |parent: &mut ChildBuilder| {
+            parent
+                .spawn((
+                    ButtonBundle {
+                        style: Style {
+                            width: Val::Px(width),
+                            height: Val::Px(height),
+                            border: UiRect::all(Val::Px(2.0)),
+                            flex_direction: FlexDirection::Column,
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        border_color: BorderColor(Color::BLACK),
+                        background_color: NORMAL_BUTTON.into(),
+                        ..default()
+                    },
+                    UpgradeButton {
+                        upgrade_type: upgrade_type,
+                        cost: cost,
+                    },
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        TextBundle::from_section(
+                            text,
+                            TextStyle {
+                                font: font_type,
+                                font_size: 24.0,
+                                color: Color::BLACK,
+                            },
+                        ),
+                        UpgradeButtonText {
+                            text_type: UpgradeTextType::Value,
+                        },
+                    ));
+                })
+                .with_children(|parent| {
+                    parent.spawn(get_cost_button_bundle(cost));
+                });
+        };
+    };
+
     //Upgrades
     commands
         .spawn(NodeBundle {
@@ -381,86 +427,32 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             ..default()
         })
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    ButtonBundle {
-                        style: Style {
-                            width: Val::Px(180.0),
-                            height: Val::Px(75.0),
-                            border: UiRect::all(Val::Px(2.0)),
-                            flex_direction: FlexDirection::Column,
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        border_color: BorderColor(Color::BLACK),
-                        background_color: NORMAL_BUTTON.into(),
-                        ..default()
-                    },
-                    UpgradeButton {
-                        upgrade_type: UpgradeType::SporeCount,
-                        cost: UPGRADE_SPORE_COUNT_BASE_COST,
-                    },
-                ))
-                .with_children(|parent| {
-                    parent.spawn((
-                        TextBundle::from_section(
-                            format!("Spore Count: {MUSHROOM_BASE_SPORE_COUNT}"),
-                            TextStyle {
-                                font: asset_server.load("fonts/Roboto-Regular.ttf"),
-                                font_size: 24.0,
-                                color: Color::BLACK,
-                            },
-                        ),
-                        UpgradeButtonText {
-                            text_type: UpgradeTextType::Value,
-                        },
-                    ));
-                })
-                .with_children(|parent| {
-                    parent.spawn(get_cost_button_bundle(UPGRADE_SPORE_COUNT_BASE_COST));
-                });
-        })
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    ButtonBundle {
-                        style: Style {
-                            width: Val::Px(240.0),
-                            height: Val::Px(75.0),
-                            border: UiRect::all(Val::Px(2.0)),
-                            flex_direction: FlexDirection::Column,
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        border_color: BorderColor(Color::BLACK),
-                        background_color: NORMAL_BUTTON.into(),
-                        ..default()
-                    },
-                    UpgradeButton {
-                        upgrade_type: UpgradeType::MushroomsPerClick,
-                        cost: UPGRADE_MUSHROOMS_PER_CLICK_BASE_COST,
-                    },
-                ))
-                .with_children(|parent| {
-                    parent.spawn((
-                        TextBundle::from_section(
-                            format!("Mushrooms per click: {BASE_MUSHROOMS_PER_CLICK}"),
-                            upgrade_button_text_style.clone(),
-                        ),
-                        UpgradeButtonText {
-                            text_type: UpgradeTextType::Value,
-                        },
-                    ));
-                })
-                .with_children(|parent| {
-                    parent.spawn(get_cost_button_bundle(
-                        UPGRADE_MUSHROOMS_PER_CLICK_BASE_COST,
-                    ));
-                });
-        });
+        //Spores
+        .with_children(create_upgrade_button(
+            180.0,
+            75.0,
+            UpgradeType::SporeCount,
+            UPGRADE_SPORE_COUNT_BASE_COST,
+            format!("Spore Count: {MUSHROOM_BASE_SPORE_COUNT}"),
+            upgrade_button_font_type.clone(),
+        ))
+        //Mushrooms per click
+        .with_children(create_upgrade_button(
+            240.0,
+            75.0,
+            UpgradeType::MushroomsPerClick,
+            UPGRADE_MUSHROOMS_PER_CLICK_BASE_COST,
+            format!("Mushrooms per click: {BASE_MUSHROOMS_PER_CLICK}"),
+            upgrade_button_font_type.clone(),
+        ))
+        .with_children(create_upgrade_button(
+            180.0,
+            75.0,
+            UpgradeType::HP,
+            UPGRADE_MUSHROOM_HP_BASE_COST,
+            format!("HP: {MUSHROOM_BASE_HP}"),
+            upgrade_button_font_type.clone(),
+        ));
 }
 
 fn setup_system(
@@ -575,12 +567,12 @@ fn upgrade_button_system(
                 button.cost *= UPGRADE_COST_BASE_MULTIPLIER;
                 let cost = button.cost;
 
-                let mut update_button_text = |child, text| {
+                let mut update_button_text = |child, text: &String| {
                     match q_button_text.get_mut(child) {
                         Ok((mut button_text, upgrade_button_text)) => {
                             match upgrade_button_text.text_type {
                                 UpgradeTextType::Value => {
-                                    button_text.sections[0].value = text;
+                                    button_text.sections[0].value = text.clone();
                                 }
                                 UpgradeTextType::Cost => {
                                     button_text.sections[0].value = format!("Cost: {cost}")
@@ -591,27 +583,31 @@ fn upgrade_button_system(
                     };
                 };
 
+                let mut update_button_children = |text: String| {
+                    for &child in children.iter() {
+                        update_button_text(child, &text);
+                    }
+                };
+
                 match button.upgrade_type {
                     UpgradeType::SporeCount => {
                         manager.mushroom_template.spore_count += 1;
-
                         let spore_count = manager.mushroom_template.spore_count;
-                        for &child in children.iter() {
-                            update_button_text(child, format!("Spore count: {spore_count}"));
-                        }
+
+                        update_button_children(format!("Spore count: {spore_count}"));
                     }
                     UpgradeType::MushroomsPerClick => {
                         manager.spawn_count += 1;
-
                         let spawn_count = manager.spawn_count;
-                        for &child in children.iter() {
-                            update_button_text(
-                                child,
-                                format!("Mushrooms per click: {spawn_count}"),
-                            );
-                        }
+
+                        update_button_children(format!("Mushrooms per click: {spawn_count}"));
                     }
-                    UpgradeType::HP => todo!(),
+                    UpgradeType::HP => {
+                        manager.mushroom_template.hp += MUSHROOM_BASE_HP;
+                        let hp = manager.mushroom_template.hp;
+
+                        update_button_children(format!("Mushroom HP: {hp}"));
+                    }
                     UpgradeType::ATK => todo!(),
                     UpgradeType::MoveSpeed => todo!(),
                     UpgradeType::AtkSpeed => todo!(),
@@ -656,11 +652,11 @@ fn hero_movement_system(
     mut q_hero: Query<(&mut Hero, &mut Transform, &InCombat)>,
     time: Res<Time>,
 ) {
-    let mut hero = q_hero.single_mut();
-    if hero.2.value {
+    let (hero, mut hero_transform, combat_status) = q_hero.single_mut();
+    if combat_status.value {
         return;
     }
-    hero.1.translation.x -= time.delta_seconds() * hero.0.move_speed;
+    hero_transform.translation.x -= time.delta_seconds() * hero.move_speed;
 }
 
 fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
@@ -686,43 +682,43 @@ fn hero_attack_system(
     mut q_hero_sprite: Query<&mut Sprite, With<Hero>>,
     q_mushroom_base: Query<&Transform, (With<MushroomBase>, Without<Hero>, Without<Mushroom>)>,
 ) {
-    let hero = q_hero.single_mut();
+    let (hero, hero_transform, mut hero_attack_timer, mut hero_combat_status) = q_hero.single_mut();
     let mushroom_base = q_mushroom_base.single();
 
-    let distance_to_base = hero.1.translation.x - mushroom_base.translation.x;
+    let distance_to_base = hero_transform.translation.x - mushroom_base.translation.x;
     if distance_to_base <= 1.0 {
         //TODO: GAME OVER
         info!("GAME OVER");
     }
 
-    let mut combat_status = hero.3;
-    let mut attack_timer = hero.2;
-
     let mut sprite = q_hero_sprite.single_mut();
 
-    combat_status.value = false;
+    if hero_attack_timer.value <= 0.0 {
+        hero_combat_status.value = false;
+    }
+
     q_mushroom.for_each_mut(|mushroom| {
         let mushroom_transform = mushroom.1;
         let mut mushroom = mushroom.0;
 
-        let distance = hero.1.translation.x - mushroom_transform.translation.x;
-        if distance <= hero.0.atk_range {
-            combat_status.value = true;
+        let distance = hero_transform.translation.x - mushroom_transform.translation.x;
+        if distance <= hero.atk_range {
+            hero_combat_status.value = true;
 
-            if attack_timer.value > 0.0 {
+            if hero_attack_timer.value > 0.0 {
                 return;
             }
 
-            mushroom.hp -= hero.0.atk;
+            mushroom.hp -= hero.atk;
         }
     });
 
-    if combat_status.value {
+    if hero_combat_status.value {
         sprite.color.set_r(0.0);
         sprite.color.set_g(1.0);
         sprite.color.set_b(1.0);
     } else {
-        attack_timer.value = 1.0 / hero.0.atk_speed;
+        hero_attack_timer.value = 1.0 / hero.atk_speed;
 
         sprite.color.set_r(1.0);
         sprite.color.set_g(1.0);
