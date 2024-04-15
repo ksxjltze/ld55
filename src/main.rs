@@ -77,7 +77,8 @@ enum ImageType {
     Hero,
     MushroomBase,
     Ground,
-    Background
+    Background,
+    Hero_Attack
 }
 
 #[derive(Resource)]
@@ -319,6 +320,13 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
         ImageType::Hero,
         SpriteImage {
             image_handle: hero_sprite_asset,
+        },
+    );
+
+    image_manager.images.insert(
+        ImageType::Hero_Attack,
+        SpriteImage {
+            image_handle: asset_server.load("hero_attack.png"),
         },
     );
 
@@ -1035,9 +1043,10 @@ fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
 fn hero_attack_system(
     mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer, &mut InCombat)>,
     mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
-    mut q_hero_sprite: Query<&mut Sprite, With<Hero>>,
+    mut q_hero_sprite: Query<(&mut Sprite, &mut Handle<Image>), With<Hero>>,
     q_mushroom_base: Query<&Transform, (With<MushroomBase>, Without<Hero>, Without<Mushroom>)>,
     mut q_game_manager: Query<&mut GameManager>,
+    image_manager: ResMut<ImageManager>
 ) {
     let (hero, hero_transform, mut hero_attack_timer, mut hero_combat_status) = q_hero.single_mut();
     let mushroom_base = q_mushroom_base.single();
@@ -1054,7 +1063,7 @@ fn hero_attack_system(
         game_manager.victory = false;
     }
 
-    let mut sprite = q_hero_sprite.single_mut();
+    let (mut sprite, mut texture) = q_hero_sprite.single_mut();
 
     if hero_attack_timer.value <= 0.0 {
         hero_combat_status.value = false;
@@ -1075,8 +1084,15 @@ fn hero_attack_system(
         }
     });
 
+    let cooldown = 1.0 / hero.atk_speed;
     if hero_attack_timer.value <= 0.0 {
-        hero_attack_timer.value = 1.0 / hero.atk_speed;
+        if hero_combat_status.value {
+            *texture = image_manager[ImageType::Hero_Attack].handle();
+        }
+        hero_attack_timer.value = cooldown;
+    }
+    else if hero_attack_timer.value <= (cooldown / 2.0) {
+        *texture = image_manager[ImageType::Hero].handle();
     }
 
     if hero_combat_status.value {
