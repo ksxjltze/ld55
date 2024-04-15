@@ -1,19 +1,17 @@
-use bevy::{
-    prelude::*, render::view::visibility, transform::commands, utils::HashMap,
-    window::PrimaryWindow,
-};
+use bevy::{prelude::*, utils::HashMap, window::PrimaryWindow};
 use rand::Rng;
-use std::{default, ops::Index, thread::spawn};
+use std::ops::Index;
 
 const GLOBAL_SCALE: f32 = 1.0;
 const TILE_SIZE: f32 = 64.0;
 const INITIAL_SPORE_COUNT: i32 = 15;
+// const INITIAL_SPORE_COUNT: i32 = 1000;
 
 //HERO
 const HERO_BASE_HP: f32 = 1000000.0;
 const HERO_BASE_ATK: f32 = 10.0;
 const HERO_BASE_MOVE_SPEED: f32 = 10.0;
-const HERO_BASE_ATK_SPEED: f32 = 0.5;
+const HERO_BASE_ATK_SPEED: f32 = 1.0;
 const HERO_BASE_ATK_RANGE: f32 = 50.0;
 const HERO_BASE_LEVEL: i32 = 1;
 const HERO_BASE_EXP_REQUIRED: f32 = 200.0;
@@ -31,8 +29,8 @@ const MUSHROOM_BASE_EXP_DROP: f32 = 1.0;
 const MUSHROOM_SPAWN_POSITION_OFFSET_AMOUNT: f32 = 5.0;
 
 //MUSHROOM LORD
-const MUSHROOM_LORD_BASE_HP: f32 = 1000.0;
-const MUSHROOM_LORD_BASE_ATK: f32 = 100.0;
+const MUSHROOM_LORD_BASE_HP: f32 = 10.0;
+const MUSHROOM_LORD_BASE_ATK: f32 = 10.0;
 const MUSHROOM_LORD_BASE_MOVE_SPEED: f32 = 100.0;
 const MUSHROOM_LORD_BASE_ATK_SPEED: f32 = 1.0;
 const MUSHROOM_LORD_BASE_ATK_RANGE: f32 = 100.0;
@@ -40,13 +38,13 @@ const MUSHROOM_LORD_BASE_SPORE_COUNT: i32 = 0;
 const MUSHROOM_LORD_BASE_EXP_DROP: f32 = 0.0;
 const MUSHROOM_LORD_SCALE: f32 = 3.0;
 
-const MUSHROOM_LORD_SPORE_MULTIPLIER_HP: f32 = 1.0;
+const MUSHROOM_LORD_SPORE_MULTIPLIER_HP: f32 = 0.1;
 const MUSHROOM_LORD_SPORE_MULTIPLIER_ATK: f32 = 0.1;
 const MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED: f32 = 0.0;
 const MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED: f32 = 0.1;
 const MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE: f32 = 0.0;
-const MUSHROOM_LORD_SPORE_MULTIPLIER_SPORE_COUNT: i32 = 0;
-const MUSHROOM_LORD_SPORE_MULTIPLIER_EXP_DROP: f32 = 0.0;
+// const MUSHROOM_LORD_SPORE_MULTIPLIER_SPORE_COUNT: i32 = 0;
+// const MUSHROOM_LORD_SPORE_MULTIPLIER_EXP_DROP: f32 = 0.0;
 
 //UI
 const NORMAL_BUTTON: Color = Color::rgb(1.0, 1.0, 1.0);
@@ -88,8 +86,6 @@ struct ImageManager {
 
 struct SpriteImage {
     image_handle: Handle<Image>,
-    width: u32,
-    height: u32,
 }
 
 impl SpriteImage {
@@ -201,6 +197,9 @@ impl Clone for Mushroom {
     }
 }
 
+#[derive(Component)]
+struct MushroomLord;
+
 #[derive(Eq, Hash, PartialEq)]
 enum UpgradeType {
     SporeCount,
@@ -282,6 +281,12 @@ struct HeroEXPText;
 #[derive(Component)]
 struct HeroLevelText;
 
+#[derive(Component)]
+struct MushroomLordHPText;
+
+#[derive(Component)]
+struct MushroomLordUI;
+
 fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res<AssetServer>) {
     let mushroom_sprite_asset: Handle<Image> = asset_server.load("boi.png");
     let mushroom_base_sprite_asset: Handle<Image> = asset_server.load("base.png");
@@ -292,8 +297,6 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
         ImageType::Mushroom,
         SpriteImage {
             image_handle: mushroom_sprite_asset,
-            width: 0,
-            height: 0,
         },
     );
 
@@ -301,8 +304,6 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
         ImageType::MushroomBase,
         SpriteImage {
             image_handle: mushroom_base_sprite_asset,
-            width: 0,
-            height: 0,
         },
     );
 
@@ -310,8 +311,6 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
         ImageType::Ground,
         SpriteImage {
             image_handle: ground_sprite_asset,
-            width: 0,
-            height: 0,
         },
     );
 
@@ -319,8 +318,6 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
         ImageType::Hero,
         SpriteImage {
             image_handle: hero_sprite_asset,
-            width: 0,
-            height: 0,
         },
     );
 }
@@ -388,6 +385,41 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                     },
                 ),
                 SporeText,
+            ));
+        });
+
+    //Mushroom Lord
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(30.0),
+                    height: Val::Percent(20.0),
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Start,
+                    justify_content: JustifyContent::Start,
+                    top: Val::Percent(10.0),
+                    left: Val::Percent(20.0),
+                    ..default()
+                },
+                visibility: Visibility::Hidden,
+                ..default()
+            },
+            MushroomLordUI,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "Mushroom Lord HP:",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 20.0,
+                        // Alpha channel of the color controls transparency.
+                        color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                    },
+                ),
+                MushroomLordHPText,
             ));
         });
 
@@ -867,11 +899,16 @@ fn summon_button_system(
     q_mushroom_base: Query<&Transform, With<MushroomBase>>,
     mut q_summon_manager: Query<&mut SummonManager>,
     mut q_spores: Query<&mut Spores>,
+    mut q_mushroom_lord_ui_visibility: Query<&mut Visibility, With<MushroomLordUI>>,
+    mut q_mushroom_lord_hp_text: Query<&mut Text, With<MushroomLordHPText>>,
 ) {
     let mushroom_sprite = &image_manager[ImageType::Mushroom];
     let mushroom_base_position = q_mushroom_base.single().translation;
     let mut summon_manager = q_summon_manager.single_mut();
     let mut spores = q_spores.single_mut();
+
+    let mut mushroom_lord_hp_text = q_mushroom_lord_hp_text.single_mut();
+    let mut mushroom_lord_ui_visibility = q_mushroom_lord_ui_visibility.single_mut();
 
     for (interaction, mut background_color) in &mut q_summon_button_interaction {
         if spores.count < SUMMON_MINIMUM_SPORE_COUNT {
@@ -885,6 +922,33 @@ fn summon_button_system(
                 if summon_manager.is_summoned {
                     return;
                 }
+
+                let mushroom_lord_stats = Mushroom {
+                    hp: MUSHROOM_LORD_BASE_HP
+                        + MUSHROOM_LORD_BASE_HP
+                            * MUSHROOM_LORD_SPORE_MULTIPLIER_HP
+                            * spores.count as f32,
+                    atk: MUSHROOM_LORD_BASE_ATK
+                        + MUSHROOM_LORD_BASE_ATK
+                            * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK
+                            * spores.count as f32,
+                    move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED
+                        + MUSHROOM_LORD_BASE_MOVE_SPEED
+                            * MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED
+                            * spores.count as f32,
+                    atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED
+                        + MUSHROOM_LORD_BASE_ATK_SPEED
+                            * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED
+                            * spores.count as f32,
+                    atk_range: MUSHROOM_LORD_BASE_ATK_RANGE
+                        + MUSHROOM_LORD_BASE_ATK_RANGE
+                            * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE
+                            * spores.count as f32,
+                    spore_count: MUSHROOM_LORD_BASE_SPORE_COUNT,
+                    xp_drop: MUSHROOM_LORD_BASE_EXP_DROP,
+                };
+
+                let mushroom_lord_hp = mushroom_lord_stats.hp;
 
                 commands.spawn((
                     SpriteBundle {
@@ -900,35 +964,17 @@ fn summon_button_system(
                         texture: mushroom_sprite.handle(),
                         ..default()
                     },
-                    Mushroom {
-                        hp: MUSHROOM_LORD_BASE_HP
-                            + MUSHROOM_LORD_BASE_HP
-                                * MUSHROOM_LORD_SPORE_MULTIPLIER_HP
-                                * spores.count as f32,
-                        atk: MUSHROOM_LORD_BASE_ATK
-                            + MUSHROOM_LORD_BASE_ATK
-                                * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK
-                                * spores.count as f32,
-                        move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED
-                            + MUSHROOM_LORD_BASE_MOVE_SPEED
-                                * MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED
-                                * spores.count as f32,
-                        atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED
-                            + MUSHROOM_LORD_BASE_ATK_SPEED
-                                * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED
-                                * spores.count as f32,
-                        atk_range: MUSHROOM_LORD_BASE_ATK_RANGE
-                            + MUSHROOM_LORD_BASE_ATK_RANGE
-                                * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE
-                                * spores.count as f32,
-                        spore_count: MUSHROOM_LORD_BASE_SPORE_COUNT,
-                        xp_drop: MUSHROOM_LORD_BASE_EXP_DROP,
-                    },
+                    mushroom_lord_stats,
+                    MushroomLord,
                     AttackTimer { value: 0.0 },
                     InCombat { value: false },
                 ));
                 spores.count = 0;
                 summon_manager.is_summoned = true;
+
+                *mushroom_lord_ui_visibility = Visibility::Visible;
+                mushroom_lord_hp_text.sections[0].value =
+                    format!("Mushroom Lord HP: {mushroom_lord_hp}");
             }
             Interaction::Hovered => {}
             Interaction::None => {}
@@ -1173,6 +1219,22 @@ fn spore_text_update_system(
     text.sections[0].value = format!("Spores: {spore_count}");
 }
 
+fn mushroom_lord_ui_update_system(
+    mut q_mushroom_lord_hp_text: Query<&mut Text, With<MushroomLordHPText>>,
+    q_mushroom_lord: Query<&Mushroom, With<MushroomLord>>,
+) {
+    let q_mushroom_lord_result = q_mushroom_lord.get_single();
+    match q_mushroom_lord_result {
+        Ok(mushroom_lord) => {
+            let mut mushroom_lord_hp_text = q_mushroom_lord_hp_text.single_mut();
+            let hp = mushroom_lord.hp;
+
+            mushroom_lord_hp_text.sections[0].value = format!("Mushroom Lord HP: {hp}");
+        }
+        Err(_) => (),
+    }
+}
+
 fn hero_hp_text_update_system(
     mut q_hero_hp_text: Query<&mut Text, With<HeroHPText>>,
     q_hero: Query<&Hero>,
@@ -1220,6 +1282,7 @@ fn main() {
                 mushroom_movement_system,
                 mushroom_death_system,
                 mushroom_attack_system,
+                mushroom_lord_ui_update_system,
                 spore_text_update_system,
                 //HERO
                 hero_hp_text_update_system,
