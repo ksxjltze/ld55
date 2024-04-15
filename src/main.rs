@@ -293,10 +293,10 @@ struct MushroomLordHPText;
 struct MushroomLordUI;
 
 fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res<AssetServer>) {
-    let mushroom_sprite_asset: Handle<Image> = asset_server.load("boi.png");
-    let mushroom_base_sprite_asset: Handle<Image> = asset_server.load("base.png");
-    let ground_sprite_asset: Handle<Image> = asset_server.load("ground.png");
-    let hero_sprite_asset: Handle<Image> = asset_server.load("hero.png");
+    let mushroom_sprite_asset: Handle<Image> = asset_server.load("./boi.png");
+    let mushroom_base_sprite_asset: Handle<Image> = asset_server.load("./base.png");
+    let ground_sprite_asset: Handle<Image> = asset_server.load("./ground.png");
+    let hero_sprite_asset: Handle<Image> = asset_server.load("./hero.png");
 
     image_manager.images.insert(
         ImageType::Mushroom,
@@ -329,21 +329,21 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
     image_manager.images.insert(
         ImageType::HeroAttack,
         SpriteImage {
-            image_handle: asset_server.load("hero_attack.png"),
+            image_handle: asset_server.load("./hero_attack.png"),
         },
     );
 
     image_manager.images.insert(
         ImageType::Background,
         SpriteImage {
-            image_handle: asset_server.load("background.png"),
+            image_handle: asset_server.load("./background.png"),
         },
     );
 }
 
 fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let font_handle = asset_server.load("fonts/Roboto-Regular.ttf");
-    let summoning_circle_image = asset_server.load("summon_circle.png");
+    let font_handle = asset_server.load("./fonts/Roboto-Regular.ttf");
+    let summoning_circle_image = asset_server.load("./summon_circle.png");
 
     //Game Over
     commands
@@ -502,7 +502,7 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 
     let upgrade_button_text_style = TextStyle {
-        font: asset_server.load("fonts/Roboto-Regular.ttf"),
+        font: asset_server.load("./fonts/Roboto-Regular.ttf"),
         font_size: 24.0,
         color: Color::BLACK,
     };
@@ -516,7 +516,7 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
         )
     };
 
-    let upgrade_button_font_type = asset_server.load("fonts/Roboto-Regular.ttf");
+    let upgrade_button_font_type = asset_server.load("./fonts/Roboto-Regular.ttf");
     let create_upgrade_button =
         |width, height, upgrade_type, cost, cost_multiplier, text, font_type| {
             return move |parent: &mut ChildBuilder| {
@@ -677,7 +677,6 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn setup_system(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     image_manager: Res<ImageManager>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -1098,7 +1097,7 @@ fn hero_attack_system(
             //lazy to make another system for this
             commands.spawn((
                 AudioBundle {
-                    source: asset_server.load("ough.ogg"),
+                    source: asset_server.load("./ough.ogg"),
                     settings: PlaybackSettings::DESPAWN,
                     ..default()
                 },
