@@ -78,7 +78,7 @@ enum ImageType {
     MushroomBase,
     Ground,
     Background,
-    Hero_Attack,
+    HeroAttack,
 }
 
 #[derive(Resource)]
@@ -324,7 +324,7 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
     );
 
     image_manager.images.insert(
-        ImageType::Hero_Attack,
+        ImageType::HeroAttack,
         SpriteImage {
             image_handle: asset_server.load("hero_attack.png"),
         },
@@ -1085,7 +1085,7 @@ fn hero_attack_system(
     let cooldown = 1.0 / hero.atk_speed;
     if hero_attack_timer.value <= 0.0 {
         if hero_combat_status.value {
-            *texture = image_manager[ImageType::Hero_Attack].handle();
+            *texture = image_manager[ImageType::HeroAttack].handle();
         }
         hero_attack_timer.value = cooldown;
     } else if hero_attack_timer.value <= (cooldown / 2.0) {
