@@ -1,6 +1,9 @@
-use bevy::{prelude::*, transform::commands, utils::HashMap, window::PrimaryWindow};
+use bevy::{
+    prelude::*, render::view::visibility, transform::commands, utils::HashMap,
+    window::PrimaryWindow,
+};
 use rand::Rng;
-use std::{ops::Index, thread::spawn};
+use std::{default, ops::Index, thread::spawn};
 
 const GLOBAL_SCALE: f32 = 1.0;
 const TILE_SIZE: f32 = 64.0;
@@ -65,7 +68,7 @@ const UPGRADE_COST_MUSHROOMS_PER_CLICK_MULTIPLIER: i32 = 3;
 //Summoning
 const SUMMON_BUTTON_INACTIVE_COLOR: BackgroundColor = BackgroundColor(Color::GRAY);
 const SUMMON_BUTTON_ACTIVE_COLOR: BackgroundColor = BackgroundColor(Color::WHITE);
-const SUMMON_MINIMUM_SPORE_COUNT: i32 = 10000;
+const SUMMON_MINIMUM_SPORE_COUNT: i32 = 1000;
 
 //Etc
 const BASE_MUSHROOMS_PER_CLICK: i32 = 1;
@@ -105,6 +108,27 @@ impl Index<ImageType> for ImageManager {
     type Output = SpriteImage;
     fn index(&self, key: ImageType) -> &SpriteImage {
         self.get(key)
+    }
+}
+
+#[derive(Component)]
+struct GameOverText;
+
+#[derive(Component)]
+struct GameOverUI;
+
+#[derive(Component)]
+struct GameManager {
+    game_over: bool,
+    victory: bool,
+}
+
+impl Default for GameManager {
+    fn default() -> Self {
+        GameManager {
+            game_over: false,
+            victory: false,
+        }
     }
 }
 
@@ -304,6 +328,39 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
 fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font_handle = asset_server.load("fonts/Roboto-Regular.ttf");
     let summoning_circle_image = asset_server.load("summon_circle.png");
+
+    //Game Over
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                background_color: BackgroundColor(Color::BLACK),
+                z_index: ZIndex::Global(999),
+                visibility: Visibility::Hidden,
+                ..default()
+            },
+            GameOverUI,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "GAME OVER",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 40.0,
+                        // Alpha channel of the color controls transparency.
+                        color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                    },
+                ),
+                GameOverText,
+            ));
+        });
 
     //Spores
     commands
@@ -656,6 +713,7 @@ fn setup_system(
     });
 
     commands.spawn(SummonManager { ..default() });
+    commands.spawn(GameManager::default());
 }
 
 fn upgrade_button_system(
@@ -666,9 +724,11 @@ fn upgrade_button_system(
     mut q_mushroom_manager: Query<&mut MushroomManager>,
     mut q_button_text: Query<(&mut Text, &UpgradeButtonText)>,
     mut q_spores: Query<&mut Spores>,
+    q_hero: Query<&Hero>,
 ) {
     let mut manager = q_mushroom_manager.single_mut();
     let mut spores = q_spores.single_mut();
+    let hero = q_hero.single();
 
     for (interaction, mut button, children) in &mut q_interaction {
         match *interaction {
@@ -705,7 +765,7 @@ fn upgrade_button_system(
 
                 match button.upgrade_type {
                     UpgradeType::SporeCount => {
-                        manager.mushroom_template.spore_count += 1;
+                        manager.mushroom_template.spore_count += hero.level;
                         let spore_count = manager.mushroom_template.spore_count;
 
                         update_button_children(format!("Spore count: {spore_count}"));
@@ -777,6 +837,26 @@ fn button_system(
     }
 }
 
+fn game_over_system(
+    q_game_manager: Query<&GameManager>,
+    mut q_game_over_ui: Query<&mut Visibility, With<GameOverUI>>,
+    mut q_game_over_text: Query<&mut Text, With<GameOverText>>,
+) {
+    let game_manager = q_game_manager.single();
+    let mut visibility = q_game_over_ui.single_mut();
+    let mut game_over_text = q_game_over_text.single_mut();
+
+    if game_manager.game_over {
+        *visibility = Visibility::Visible;
+
+        if game_manager.victory {
+            game_over_text.sections[0].value = "VICTORY".to_string();
+        } else {
+            game_over_text.sections[0].value = "GAME OVER".to_string();
+        }
+    }
+}
+
 fn summon_button_system(
     mut commands: Commands,
     mut q_summon_button_interaction: Query<
@@ -821,11 +901,26 @@ fn summon_button_system(
                         ..default()
                     },
                     Mushroom {
-                        hp: MUSHROOM_LORD_BASE_HP + MUSHROOM_LORD_BASE_HP * MUSHROOM_LORD_SPORE_MULTIPLIER_HP * spores.count as f32,
-                        atk: MUSHROOM_LORD_BASE_ATK + MUSHROOM_LORD_BASE_ATK  * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK * spores.count as f32,
-                        move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED + MUSHROOM_LORD_BASE_MOVE_SPEED  * MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED * spores.count as f32,
-                        atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED + MUSHROOM_LORD_BASE_ATK_SPEED * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED * spores.count as f32,
-                        atk_range: MUSHROOM_LORD_BASE_ATK_RANGE + MUSHROOM_LORD_BASE_ATK_RANGE * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE * spores.count as f32,
+                        hp: MUSHROOM_LORD_BASE_HP
+                            + MUSHROOM_LORD_BASE_HP
+                                * MUSHROOM_LORD_SPORE_MULTIPLIER_HP
+                                * spores.count as f32,
+                        atk: MUSHROOM_LORD_BASE_ATK
+                            + MUSHROOM_LORD_BASE_ATK
+                                * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK
+                                * spores.count as f32,
+                        move_speed: MUSHROOM_LORD_BASE_MOVE_SPEED
+                            + MUSHROOM_LORD_BASE_MOVE_SPEED
+                                * MUSHROOM_LORD_SPORE_MULTIPLIER_MOVE_SPEED
+                                * spores.count as f32,
+                        atk_speed: MUSHROOM_LORD_BASE_ATK_SPEED
+                            + MUSHROOM_LORD_BASE_ATK_SPEED
+                                * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_SPEED
+                                * spores.count as f32,
+                        atk_range: MUSHROOM_LORD_BASE_ATK_RANGE
+                            + MUSHROOM_LORD_BASE_ATK_RANGE
+                                * MUSHROOM_LORD_SPORE_MULTIPLIER_ATK_RANGE
+                                * spores.count as f32,
                         spore_count: MUSHROOM_LORD_BASE_SPORE_COUNT,
                         xp_drop: MUSHROOM_LORD_BASE_EXP_DROP,
                     },
@@ -874,14 +969,21 @@ fn hero_attack_system(
     mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
     mut q_hero_sprite: Query<&mut Sprite, With<Hero>>,
     q_mushroom_base: Query<&Transform, (With<MushroomBase>, Without<Hero>, Without<Mushroom>)>,
+    mut q_game_manager: Query<&mut GameManager>,
 ) {
     let (hero, hero_transform, mut hero_attack_timer, mut hero_combat_status) = q_hero.single_mut();
     let mushroom_base = q_mushroom_base.single();
+    let mut game_manager = q_game_manager.single_mut();
+
+    if game_manager.game_over {
+        hero_combat_status.value = false;
+        return;
+    }
 
     let distance_to_base = hero_transform.translation.x - mushroom_base.translation.x;
     if distance_to_base <= 1.0 {
-        //TODO: GAME OVER
-        info!("GAME OVER");
+        game_manager.game_over = true;
+        game_manager.victory = false;
     }
 
     let mut sprite = q_hero_sprite.single_mut();
@@ -944,6 +1046,16 @@ fn mushroom_death_system(
             hero.exp += mushroom.2.xp_drop;
         }
     })
+}
+
+fn hero_death_system(mut q_hero: Query<&Hero>, mut q_game_manager: Query<&mut GameManager>) {
+    let hero = q_hero.single_mut();
+    let mut game_manager = q_game_manager.single_mut();
+
+    if hero.hp <= 0.0 {
+        game_manager.game_over = true;
+        game_manager.victory = true;
+    }
 }
 
 fn mushroom_spawn_system(
@@ -1115,10 +1227,12 @@ fn main() {
                 hero_level_text_update_system,
                 hero_movement_system,
                 hero_level_system,
+                hero_death_system,
                 //UI
                 button_system,
                 upgrade_button_system,
                 summon_button_system,
+                game_over_system,
             ),
         )
         .run();
