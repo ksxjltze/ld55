@@ -131,6 +131,9 @@ impl Default for GameManager {
 }
 
 #[derive(Component)]
+struct HeroAttackAudio;
+
+#[derive(Component)]
 struct GameCamera;
 
 #[derive(Component)]
@@ -674,6 +677,7 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn setup_system(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     image_manager: Res<ImageManager>,
     q_windows: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -1038,6 +1042,7 @@ fn hero_level_system(mut q_hero: Query<&mut Hero>, time: Res<Time>) {
     }
 }
 
+//lol
 fn hero_attack_system(
     mut q_hero: Query<(&mut Hero, &mut Transform, &mut AttackTimer, &mut InCombat)>,
     mut q_mushroom: Query<(&mut Mushroom, &mut Transform), Without<Hero>>,
@@ -1045,6 +1050,8 @@ fn hero_attack_system(
     q_mushroom_base: Query<&Transform, (With<MushroomBase>, Without<Hero>, Without<Mushroom>)>,
     mut q_game_manager: Query<&mut GameManager>,
     image_manager: ResMut<ImageManager>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ) {
     let (hero, hero_transform, mut hero_attack_timer, mut hero_combat_status) = q_hero.single_mut();
     let mushroom_base = q_mushroom_base.single();
@@ -1086,6 +1093,17 @@ fn hero_attack_system(
     if hero_attack_timer.value <= 0.0 {
         if hero_combat_status.value {
             *texture = image_manager[ImageType::HeroAttack].handle();
+
+            //hack to make it play every time
+            //lazy to make another system for this
+            commands.spawn((
+                AudioBundle {
+                    source: asset_server.load("ough.ogg"),
+                    settings: PlaybackSettings::DESPAWN,
+                    ..default()
+                },
+                HeroAttackAudio,
+            ));
         }
         hero_attack_timer.value = cooldown;
     } else if hero_attack_timer.value <= (cooldown / 2.0) {
