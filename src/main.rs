@@ -78,7 +78,7 @@ enum ImageType {
     MushroomBase,
     Ground,
     Background,
-    Hero_Attack
+    Hero_Attack,
 }
 
 #[derive(Resource)]
@@ -716,17 +716,15 @@ fn setup_system(
     }
 
     //Background
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform {
-                translation: Vec3::new(0.0, 0.0, -1.0),
-                scale: (Vec3::splat(1.0)),
-                ..default()
-            },
-            texture: image_manager[ImageType::Background].handle(),
+    commands.spawn((SpriteBundle {
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.0, -1.0),
+            scale: (Vec3::splat(1.0)),
             ..default()
         },
-    ));
+        texture: image_manager[ImageType::Background].handle(),
+        ..default()
+    },));
 
     let initial_height = -y_offset + (tile_y_count as f32) * TILE_SIZE;
     commands.spawn((
@@ -1046,7 +1044,7 @@ fn hero_attack_system(
     mut q_hero_sprite: Query<(&mut Sprite, &mut Handle<Image>), With<Hero>>,
     q_mushroom_base: Query<&Transform, (With<MushroomBase>, Without<Hero>, Without<Mushroom>)>,
     mut q_game_manager: Query<&mut GameManager>,
-    image_manager: ResMut<ImageManager>
+    image_manager: ResMut<ImageManager>,
 ) {
     let (hero, hero_transform, mut hero_attack_timer, mut hero_combat_status) = q_hero.single_mut();
     let mushroom_base = q_mushroom_base.single();
@@ -1090,8 +1088,7 @@ fn hero_attack_system(
             *texture = image_manager[ImageType::Hero_Attack].handle();
         }
         hero_attack_timer.value = cooldown;
-    }
-    else if hero_attack_timer.value <= (cooldown / 2.0) {
+    } else if hero_attack_timer.value <= (cooldown / 2.0) {
         *texture = image_manager[ImageType::Hero].handle();
     }
 
@@ -1227,7 +1224,7 @@ fn mushroom_attack_system(
     let mut hero = q_hero.single_mut();
 
     q_mushroom.for_each_mut(|mushroom_data| {
-        let mushroom_transform = mushroom_data.1;
+        let mut mushroom_transform = mushroom_data.1;
         let mushroom = mushroom_data.0;
         let mut attack_timer = mushroom_data.2;
         let mut combat_status = mushroom_data.3;
@@ -1240,12 +1237,21 @@ fn mushroom_attack_system(
         if distance <= mushroom.atk_range {
             combat_status.value = true;
 
+            let cooldown = 1.0 / mushroom.atk_speed;
+            if attack_timer.value <= (cooldown * 0.5) {
+                mushroom_transform.scale.y = 1.0;
+            }
+
             if attack_timer.value > 0.0 {
                 return;
             }
 
             hero.0.hp -= mushroom.atk;
-            attack_timer.value = 1.0 / mushroom.atk_speed;
+
+            if combat_status.value {
+                mushroom_transform.scale.y = 1.1;
+            }
+            attack_timer.value = cooldown;
         }
 
         if combat_status.value {
