@@ -77,6 +77,7 @@ enum ImageType {
     Hero,
     MushroomBase,
     Ground,
+    Background
 }
 
 #[derive(Resource)]
@@ -320,6 +321,13 @@ fn load_assets_system(mut image_manager: ResMut<ImageManager>, asset_server: Res
             image_handle: hero_sprite_asset,
         },
     );
+
+    image_manager.images.insert(
+        ImageType::Background,
+        SpriteImage {
+            image_handle: asset_server.load("background.png"),
+        },
+    );
 }
 
 fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -367,7 +375,7 @@ fn setup_ui_system(mut commands: Commands, asset_server: Res<AssetServer>) {
                 height: Val::Percent(10.0),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Start,
-                left: Val::Percent(5.0),
+                left: Val::Percent(20.0),
                 top: Val::Percent(5.0),
                 ..default()
             },
@@ -678,6 +686,7 @@ fn setup_system(
     let x_offset = width / 2.0;
     let y_offset = height / 2.0;
 
+    //Ground
     for i in 0..tile_x_count + 1 {
         for j in 0..tile_y_count {
             let x = (i * tile_size) as f32 - x_offset;
@@ -697,6 +706,19 @@ fn setup_system(
             ));
         }
     }
+
+    //Background
+    commands.spawn((
+        SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(0.0, 0.0, -1.0),
+                scale: (Vec3::splat(1.0)),
+                ..default()
+            },
+            texture: image_manager[ImageType::Background].handle(),
+            ..default()
+        },
+    ));
 
     let initial_height = -y_offset + (tile_y_count as f32) * TILE_SIZE;
     commands.spawn((
@@ -1181,6 +1203,7 @@ fn mushroom_attack_system(
             &mut Transform,
             &mut AttackTimer,
             &mut InCombat,
+            &mut Sprite,
         ),
         Without<Hero>,
     >,
@@ -1192,6 +1215,8 @@ fn mushroom_attack_system(
         let mushroom = mushroom_data.0;
         let mut attack_timer = mushroom_data.2;
         let mut combat_status = mushroom_data.3;
+
+        let mut sprite = mushroom_data.4;
 
         let distance = hero.1.translation.x - mushroom_transform.translation.x;
         combat_status.value = false;
@@ -1205,6 +1230,16 @@ fn mushroom_attack_system(
 
             hero.0.hp -= mushroom.atk;
             attack_timer.value = 1.0 / mushroom.atk_speed;
+        }
+
+        if combat_status.value {
+            sprite.color.set_r(0.0);
+            sprite.color.set_g(1.0);
+            sprite.color.set_b(1.0);
+        } else {
+            sprite.color.set_r(1.0);
+            sprite.color.set_g(1.0);
+            sprite.color.set_b(1.0);
         }
     });
 }
